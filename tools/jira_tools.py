@@ -61,25 +61,36 @@ def jira_search(version: str, project: str = "ODF") -> str:
         issues = []
         for issue in data.get("issues", []):
             fields = issue.get("fields", {})
-            issues.append({
-                "key": issue["key"],
-                "summary": fields.get("summary", ""),
-                "status": fields.get("status", {}).get("name", ""),
-                "priority": fields.get("priority", {}).get("name", ""),
-                "issuetype": fields.get("issuetype", {}).get("name", ""),
-                "components": [c.get("name", "") for c in fields.get("components", [])],
-                "labels": fields.get("labels", []),
-                "fixVersions": [v.get("name", "") for v in fields.get("fixVersions", [])],
-                "assignee": fields.get("assignee", {}).get("displayName", "Unassigned") if fields.get("assignee") else "Unassigned",
-            })
+            issues.append(
+                {
+                    "key": issue["key"],
+                    "summary": fields.get("summary", ""),
+                    "status": fields.get("status", {}).get("name", ""),
+                    "priority": fields.get("priority", {}).get("name", ""),
+                    "issuetype": fields.get("issuetype", {}).get("name", ""),
+                    "components": [c.get("name", "") for c in fields.get("components", [])],
+                    "labels": fields.get("labels", []),
+                    "fixVersions": [v.get("name", "") for v in fields.get("fixVersions", [])],
+                    "assignee": (
+                        fields.get("assignee", {}).get("displayName", "Unassigned")
+                        if fields.get("assignee")
+                        else "Unassigned"
+                    ),
+                }
+            )
 
-        return json.dumps({
-            "total": data.get("total", 0),
-            "issues": issues,
-        }, indent=2)
+        return json.dumps(
+            {
+                "total": data.get("total", 0),
+                "issues": issues,
+            },
+            indent=2,
+        )
 
     except httpx.HTTPStatusError as exc:
-        return json.dumps({"error": f"Jira API error {exc.response.status_code}: {exc.response.text[:500]}"})
+        return json.dumps(
+            {"error": f"Jira API error {exc.response.status_code}: {exc.response.text[:500]}"}
+        )
     except Exception as exc:
         return json.dumps({"error": f"Jira request failed: {str(exc)}"})
 
@@ -106,7 +117,7 @@ def jira_get_issue(issue_key: str) -> str:
     url = f"{config.JIRA_URL.rstrip('/')}/rest/api/3/issue/{issue_key}"
     params = {
         "fields": "summary,description,status,priority,components,labels,fixVersions,"
-                   "issuetype,assignee,comment,issuelinks,created,updated,resolution",
+        "issuetype,assignee,comment,issuelinks,created,updated,resolution",
     }
 
     try:
@@ -140,11 +151,13 @@ def jira_get_issue(issue_key: str) -> str:
                         if inline.get("type") == "text":
                             text_parts.append(inline.get("text", ""))
                 body = " ".join(text_parts)
-            comments.append({
-                "author": c.get("author", {}).get("displayName", ""),
-                "created": c.get("created", ""),
-                "body": body[:500],
-            })
+            comments.append(
+                {
+                    "author": c.get("author", {}).get("displayName", ""),
+                    "created": c.get("created", ""),
+                    "body": body[:500],
+                }
+            )
 
         # Extract linked issues
         links = []
@@ -172,11 +185,17 @@ def jira_get_issue(issue_key: str) -> str:
             "status": fields.get("status", {}).get("name", ""),
             "priority": fields.get("priority", {}).get("name", ""),
             "issuetype": fields.get("issuetype", {}).get("name", ""),
-            "resolution": fields.get("resolution", {}).get("name", "") if fields.get("resolution") else None,
+            "resolution": (
+                fields.get("resolution", {}).get("name", "") if fields.get("resolution") else None
+            ),
             "components": [c.get("name", "") for c in fields.get("components", [])],
             "labels": fields.get("labels", []),
             "fixVersions": [v.get("name", "") for v in fields.get("fixVersions", [])],
-            "assignee": fields.get("assignee", {}).get("displayName", "Unassigned") if fields.get("assignee") else "Unassigned",
+            "assignee": (
+                fields.get("assignee", {}).get("displayName", "Unassigned")
+                if fields.get("assignee")
+                else "Unassigned"
+            ),
             "created": fields.get("created", ""),
             "updated": fields.get("updated", ""),
             "comments": comments[-5:],  # Last 5 comments
@@ -186,7 +205,9 @@ def jira_get_issue(issue_key: str) -> str:
         return json.dumps(result, indent=2)
 
     except httpx.HTTPStatusError as exc:
-        return json.dumps({"error": f"Jira API error {exc.response.status_code}: {exc.response.text[:500]}"})
+        return json.dumps(
+            {"error": f"Jira API error {exc.response.status_code}: {exc.response.text[:500]}"}
+        )
     except Exception as exc:
         return json.dumps({"error": f"Jira request failed: {str(exc)}"})
 
@@ -215,7 +236,7 @@ def jira_create_bug(summary: str, description: str, component: str, labels: str 
 
     url = f"{config.JIRA_URL.rstrip('/')}/rest/api/3/issue"
 
-    label_list = [l.strip() for l in labels.split(",") if l.strip()] if labels else []
+    label_list = [item.strip() for item in labels.split(",") if item.strip()] if labels else []
 
     payload = {
         "fields": {
@@ -251,14 +272,19 @@ def jira_create_bug(summary: str, description: str, component: str, labels: str 
         issue_key = data.get("key", "")
         issue_url = f"{config.JIRA_URL.rstrip('/')}/browse/{issue_key}"
 
-        return json.dumps({
-            "key": issue_key,
-            "url": issue_url,
-            "message": f"Bug {issue_key} created successfully",
-        }, indent=2)
+        return json.dumps(
+            {
+                "key": issue_key,
+                "url": issue_url,
+                "message": f"Bug {issue_key} created successfully",
+            },
+            indent=2,
+        )
 
     except httpx.HTTPStatusError as exc:
-        return json.dumps({"error": f"Jira API error {exc.response.status_code}: {exc.response.text[:500]}"})
+        return json.dumps(
+            {"error": f"Jira API error {exc.response.status_code}: {exc.response.text[:500]}"}
+        )
     except Exception as exc:
         return json.dumps({"error": f"Failed to create bug: {str(exc)}"})
 

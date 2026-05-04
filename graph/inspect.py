@@ -3,6 +3,7 @@
 Three parallel data-gathering nodes (Jira, Errata, Git) feed into a
 single merge node that produces the unified ChangeManifest.
 """
+
 from __future__ import annotations
 
 from langgraph.graph import StateGraph, START, END

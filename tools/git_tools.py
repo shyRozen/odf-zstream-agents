@@ -19,11 +19,13 @@ def _run_git(repo_path: str, args: list[str], max_output: int = 50000) -> str:
             timeout=60,
         )
         if result.returncode != 0:
-            return json.dumps({
-                "error": f"git command failed (exit {result.returncode})",
-                "stderr": result.stderr[:2000],
-                "command": f"git {' '.join(args)}",
-            })
+            return json.dumps(
+                {
+                    "error": f"git command failed (exit {result.returncode})",
+                    "stderr": result.stderr[:2000],
+                    "command": f"git {' '.join(args)}",
+                }
+            )
 
         output = result.stdout
         truncated = False
@@ -31,10 +33,12 @@ def _run_git(repo_path: str, args: list[str], max_output: int = 50000) -> str:
             output = output[:max_output]
             truncated = True
 
-        return json.dumps({
-            "output": output,
-            "truncated": truncated,
-        })
+        return json.dumps(
+            {
+                "output": output,
+                "truncated": truncated,
+            }
+        )
 
     except subprocess.TimeoutExpired:
         return json.dumps({"error": f"git command timed out: git {' '.join(args)}"})
@@ -66,13 +70,16 @@ def git_diff_files(repo_path: str, from_tag: str, to_tag: str) -> str:
             return result
 
         files = [f for f in parsed["output"].strip().split("\n") if f]
-        return json.dumps({
-            "from_tag": from_tag,
-            "to_tag": to_tag,
-            "file_count": len(files),
-            "files": files,
-            "truncated": parsed.get("truncated", False),
-        }, indent=2)
+        return json.dumps(
+            {
+                "from_tag": from_tag,
+                "to_tag": to_tag,
+                "file_count": len(files),
+                "files": files,
+                "truncated": parsed.get("truncated", False),
+            },
+            indent=2,
+        )
     except (json.JSONDecodeError, KeyError):
         return result
 
@@ -107,18 +114,23 @@ def git_log_between(repo_path: str, from_tag: str, to_tag: str) -> str:
             if not line:
                 continue
             parts = line.split(" ", 1)
-            commits.append({
-                "sha": parts[0],
-                "message": parts[1] if len(parts) > 1 else "",
-            })
+            commits.append(
+                {
+                    "sha": parts[0],
+                    "message": parts[1] if len(parts) > 1 else "",
+                }
+            )
 
-        return json.dumps({
-            "from_tag": from_tag,
-            "to_tag": to_tag,
-            "commit_count": len(commits),
-            "commits": commits,
-            "truncated": parsed.get("truncated", False),
-        }, indent=2)
+        return json.dumps(
+            {
+                "from_tag": from_tag,
+                "to_tag": to_tag,
+                "commit_count": len(commits),
+                "commits": commits,
+                "truncated": parsed.get("truncated", False),
+            },
+            indent=2,
+        )
     except (json.JSONDecodeError, KeyError):
         return result
 
@@ -159,13 +171,13 @@ def git_show_commit(repo_path: str, commit_sha: str) -> str:
 
         for line in lines[:15]:
             if line.startswith("Author:"):
-                commit_info["author"] = line[len("Author:"):].strip()
+                commit_info["author"] = line[len("Author:") :].strip()
             elif line.startswith("AuthorDate:"):
-                commit_info["author_date"] = line[len("AuthorDate:"):].strip()
+                commit_info["author_date"] = line[len("AuthorDate:") :].strip()
             elif line.startswith("Commit:"):
-                commit_info["committer"] = line[len("Commit:"):].strip()
+                commit_info["committer"] = line[len("Commit:") :].strip()
             elif line.startswith("CommitDate:"):
-                commit_info["commit_date"] = line[len("CommitDate:"):].strip()
+                commit_info["commit_date"] = line[len("CommitDate:") :].strip()
 
         return json.dumps(commit_info, indent=2)
     except (json.JSONDecodeError, KeyError):

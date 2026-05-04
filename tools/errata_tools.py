@@ -8,7 +8,6 @@ import re
 import httpx
 from langchain_core.tools import tool
 
-
 # Red Hat public errata API base URL
 ERRATA_API_BASE = "https://errata.devel.redhat.com/api/v1"
 # Public advisory listing (no auth required for released advisories)
@@ -52,43 +51,54 @@ def errata_fetch(version: str) -> str:
         advisories = []
         for item in data.get("data", []):
             attrs = item.get("attributes", {})
-            advisories.append({
-                "id": item.get("id", ""),
-                "advisory_name": attrs.get("advisory_name", ""),
-                "synopsis": attrs.get("synopsis", ""),
-                "type": attrs.get("errata_type", ""),
-                "severity": attrs.get("severity", ""),
-                "status": attrs.get("status", ""),
-                "release_date": attrs.get("actual_ship_date", ""),
-                "cves": attrs.get("cves", []),
-                "bugs": attrs.get("bugs", []),
-            })
+            advisories.append(
+                {
+                    "id": item.get("id", ""),
+                    "advisory_name": attrs.get("advisory_name", ""),
+                    "synopsis": attrs.get("synopsis", ""),
+                    "type": attrs.get("errata_type", ""),
+                    "severity": attrs.get("severity", ""),
+                    "status": attrs.get("status", ""),
+                    "release_date": attrs.get("actual_ship_date", ""),
+                    "cves": attrs.get("cves", []),
+                    "bugs": attrs.get("bugs", []),
+                }
+            )
 
-        return json.dumps({
-            "version": version,
-            "source": "errata_api",
-            "total": len(advisories),
-            "advisories": advisories,
-        }, indent=2)
+        return json.dumps(
+            {
+                "version": version,
+                "source": "errata_api",
+                "total": len(advisories),
+                "advisories": advisories,
+            },
+            indent=2,
+        )
 
     except (httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException) as exc:
         # Return a structured fallback so downstream agents can still proceed
-        return json.dumps({
-            "version": version,
-            "source": "fallback",
-            "total": 0,
-            "advisories": [],
-            "note": f"Errata API unavailable ({type(exc).__name__}: {str(exc)[:200]}). "
-                    "Advisories could not be fetched. Proceed with Jira and git sources.",
-        }, indent=2)
+        return json.dumps(
+            {
+                "version": version,
+                "source": "fallback",
+                "total": 0,
+                "advisories": [],
+                "note": f"Errata API unavailable ({type(exc).__name__}: {str(exc)[:200]}). "
+                "Advisories could not be fetched. Proceed with Jira and git sources.",
+            },
+            indent=2,
+        )
     except Exception as exc:
-        return json.dumps({
-            "version": version,
-            "source": "error",
-            "total": 0,
-            "advisories": [],
-            "error": f"Unexpected error fetching errata: {str(exc)}",
-        }, indent=2)
+        return json.dumps(
+            {
+                "version": version,
+                "source": "error",
+                "total": 0,
+                "advisories": [],
+                "error": f"Unexpected error fetching errata: {str(exc)}",
+            },
+            indent=2,
+        )
 
 
 def errata_parse(advisory_content: str) -> str:
@@ -165,26 +175,40 @@ def errata_parse(advisory_content: str) -> str:
 
         # Extract ODF component names from content
         odf_components = [
-            "ceph-csi", "mcg", "noobaa", "rgw", "rook",
-            "ocs-operator", "odf-operator", "odf-console",
-            "monitoring", "encryption", "lvmo", "lvm",
-            "disaster-recovery", "nfs", "ui",
+            "ceph-csi",
+            "mcg",
+            "noobaa",
+            "rgw",
+            "rook",
+            "ocs-operator",
+            "odf-operator",
+            "odf-console",
+            "monitoring",
+            "encryption",
+            "lvmo",
+            "lvm",
+            "disaster-recovery",
+            "nfs",
+            "ui",
         ]
         for comp in odf_components:
             if comp in content_lower:
                 components.append(comp)
         components = list(set(components))
 
-        return json.dumps({
-            "advisory_type": advisory_type,
-            "severity": severity,
-            "synopsis": synopsis,
-            "cves": cves,
-            "bugs": bugs,
-            "components": components,
-            "cve_count": len(cves),
-            "bug_count": len(bugs),
-        }, indent=2)
+        return json.dumps(
+            {
+                "advisory_type": advisory_type,
+                "severity": severity,
+                "synopsis": synopsis,
+                "cves": cves,
+                "bugs": bugs,
+                "components": components,
+                "cve_count": len(cves),
+                "bug_count": len(bugs),
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to parse advisory content: {str(exc)}"})

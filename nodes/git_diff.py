@@ -3,6 +3,7 @@
 NO LLM — deterministic node that calls git tools directly and maps
 file paths to ODF components.
 """
+
 from __future__ import annotations
 
 import json
@@ -78,10 +79,16 @@ def git_diff(state: InspectState) -> dict:
     try:
         # Get file-level diff between versions
         diff_result = git_diff_files(config.OCS_CI_REPO_PATH, previous, version)
-        diff_files = json.loads(diff_result).get("files", []) if isinstance(diff_result, str) else diff_result
+        diff_files = (
+            json.loads(diff_result).get("files", [])
+            if isinstance(diff_result, str)
+            else diff_result
+        )
         # Get commit log between versions
         log_result = git_log_between(config.OCS_CI_REPO_PATH, previous, version)
-        commit_log = json.loads(log_result).get("commits", []) if isinstance(log_result, str) else log_result
+        commit_log = (
+            json.loads(log_result).get("commits", []) if isinstance(log_result, str) else log_result
+        )
 
         if not diff_files and not commit_log:
             logger.info("No git changes between %s and %s", previous, version)
@@ -225,16 +232,20 @@ def _parse_commit_log(commit_log: str | list | dict) -> list[dict]:
         # Try to match "hash message" format
         parts = line.split(None, 1)
         if len(parts) >= 2:
-            commits.append({
-                "hash": parts[0],
-                "message": parts[1],
-                "files": [],
-            })
+            commits.append(
+                {
+                    "hash": parts[0],
+                    "message": parts[1],
+                    "files": [],
+                }
+            )
         elif len(parts) == 1:
-            commits.append({
-                "hash": parts[0],
-                "message": "",
-                "files": [],
-            })
+            commits.append(
+                {
+                    "hash": parts[0],
+                    "message": "",
+                    "files": [],
+                }
+            )
 
     return commits

@@ -4,6 +4,7 @@ Uses the unified agent runner (run_node, not JSON) to generate a descriptive
 PR body.  Keeps direct calls to github_tools functions for branch/mark/PR
 creation.  Falls back to a template-based PR description.
 """
+
 from __future__ import annotations
 
 import json
@@ -75,9 +76,7 @@ def pr_builder(state: PipelineState) -> dict:
                 )
                 marked_count += 1
             except Exception as e:
-                logger.warning(
-                    "Failed to add mark to %s: %s", test.test_node_id, e
-                )
+                logger.warning("Failed to add mark to %s: %s", test.test_node_id, e)
                 mark_errors.append(f"{test.test_node_id}: {e}")
 
         if marked_count == 0:
@@ -151,6 +150,7 @@ def pr_builder(state: PipelineState) -> dict:
 # ------------------------------------------------------------------
 # PR description generation
 # ------------------------------------------------------------------
+
 
 def _generate_pr_description(
     manifest: ChangeManifest | None,

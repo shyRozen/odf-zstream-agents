@@ -3,6 +3,7 @@
 NO LLM — deterministic node that triggers a build, polls with
 exponential backoff, and fetches JUnit results.
 """
+
 from __future__ import annotations
 
 import json
@@ -126,7 +127,11 @@ def jenkins_agent(state: PipelineState) -> dict:
 
                 # Check if the build is complete
                 if build_status and build_status.upper() in (
-                    "SUCCESS", "FAILURE", "UNSTABLE", "ABORTED", "NOT_BUILT",
+                    "SUCCESS",
+                    "FAILURE",
+                    "UNSTABLE",
+                    "ABORTED",
+                    "NOT_BUILT",
                 ):
                     logger.info("Jenkins build completed with status: %s", build_status)
                     # Update build_url if returned by status check

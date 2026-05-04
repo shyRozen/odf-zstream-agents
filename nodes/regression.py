@@ -3,6 +3,7 @@
 Uses Sonnet to compare current failures against historical test results
 and identify new regressions (tests that previously passed but now fail).
 """
+
 from __future__ import annotations
 
 import json
@@ -61,9 +62,7 @@ def regression(state: AnalyzeState) -> dict:
         return {"regressions": []}
 
     # Get current failures
-    current_failures = [
-        t for t in junit_results.test_details if t.status in ("FAIL", "ERROR")
-    ]
+    current_failures = [t for t in junit_results.test_details if t.status in ("FAIL", "ERROR")]
     if not current_failures:
         logger.info("No failures in current run, no regressions")
         return {"regressions": []}
@@ -113,9 +112,7 @@ def regression(state: AnalyzeState) -> dict:
         llm = get_llm("regression")
         if llm is not None:
             try:
-                regressions = _detect_with_llm(
-                    llm, current_failures, historical, manifest
-                )
+                regressions = _detect_with_llm(llm, current_failures, historical, manifest)
                 if regressions:
                     return {"regressions": regressions}
             except Exception as e:
@@ -168,10 +165,12 @@ def _detect_with_llm(
         f"{json.dumps(historical, indent=2, default=str)}"
     )
 
-    response = llm.invoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=prompt),
-    ])
+    response = llm.invoke(
+        [
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=prompt),
+        ]
+    )
 
     return _parse_regression_response(response.content)
 
@@ -228,8 +227,7 @@ def _detect_without_llm(
         for test_id, statuses in historical.items():
             if isinstance(statuses, list):
                 history_map[test_id] = [
-                    s if isinstance(s, str) else s.get("status", "UNKNOWN")
-                    for s in statuses
+                    s if isinstance(s, str) else s.get("status", "UNKNOWN") for s in statuses
                 ]
             elif isinstance(statuses, dict):
                 status_val = statuses.get("status", statuses.get("result", "UNKNOWN"))

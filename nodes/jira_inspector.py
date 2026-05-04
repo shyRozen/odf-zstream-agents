@@ -4,9 +4,9 @@ Uses the unified agent runner to extract structured Change objects from Jira
 search results.  Falls back to deterministic parsing when the agent is
 unavailable.
 """
+
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 
@@ -34,7 +34,7 @@ def jira_inspector(state: InspectState) -> dict:
             f"Query Jira for ODF bugs fixed in version {version}.\n\n"
             f"Steps:\n"
             f"1. Use curl to query the Jira REST API for issues with "
-            f"   fixVersion=\"{version}\" in the ODF project that are Closed, "
+            f'   fixVersion="{version}" in the ODF project that are Closed, '
             f"   Resolved, or Verified.  Sort by priority DESC.\n"
             f"2. For each issue found, fetch its full details.\n"
             f"3. Extract structured change information.\n\n"
@@ -85,6 +85,7 @@ def jira_inspector(state: InspectState) -> dict:
 # ------------------------------------------------------------------
 # Parsing helpers
 # ------------------------------------------------------------------
+
 
 def _parse_raw_changes(raw: dict | list) -> list[Change]:
     """Convert agent JSON output into a list of Change objects."""

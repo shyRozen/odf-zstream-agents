@@ -5,6 +5,7 @@ each failure's error message, test source code, and related z-stream change
 to determine the root cause and classify it as product_bug, test_bug, or
 infra_issue.  Falls back to basic pattern-based classification.
 """
+
 from __future__ import annotations
 
 import json
@@ -40,7 +41,8 @@ def root_cause(state: AnalyzeState) -> dict:
 
     # Filter to only failures that need root cause analysis
     needs_analysis = [
-        c for c in classifications
+        c
+        for c in classifications
         if c.root_cause == "Pending root cause analysis"
         or c.confidence < config.ROOT_CAUSE_CONFIDENCE_THRESHOLD
     ]
@@ -122,6 +124,7 @@ def root_cause(state: AnalyzeState) -> dict:
 # Context builders
 # ------------------------------------------------------------------
 
+
 def _build_changes_context(manifest: ChangeManifest | None) -> str:
     """Build a context string describing the z-stream changes."""
     if not manifest or not manifest.changes:
@@ -130,8 +133,7 @@ def _build_changes_context(manifest: ChangeManifest | None) -> str:
     lines = [f"Version: {manifest.zstream_version}"]
     for change in manifest.changes:
         lines.append(
-            f"- [{change.id}] {change.component} ({change.type.value}): "
-            f"{change.summary}"
+            f"- [{change.id}] {change.component} ({change.type.value}): " f"{change.summary}"
         )
         if change.files_changed:
             lines.append(f"  Files: {', '.join(change.files_changed[:5])}")
@@ -177,6 +179,7 @@ def _build_failures_context(
 # Parsing helpers
 # ------------------------------------------------------------------
 
+
 def _parse_rca_results(raw: dict | list) -> list[FailureAnalysis]:
     """Convert agent JSON output into FailureAnalysis objects."""
     items = raw if isinstance(raw, list) else [raw]
@@ -202,6 +205,7 @@ def _parse_rca_results(raw: dict | list) -> list[FailureAnalysis]:
 # ------------------------------------------------------------------
 # Deterministic fallback
 # ------------------------------------------------------------------
+
 
 def _basic_root_cause(failures: list[FailureAnalysis]) -> list[FailureAnalysis]:
     """Provide basic root cause descriptions without agent."""

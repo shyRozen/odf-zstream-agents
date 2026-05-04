@@ -5,15 +5,15 @@ each test's relevance to the z-stream changes by reading test code,
 pytest marks, and change descriptions.  Falls back to heuristic scoring
 based on component/keyword overlap.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 
 from core.agent_runner import run_node_json
 from core import config
-from core.models import ChangeManifest, StageError, TestSelection
+from core.models import ChangeManifest, TestSelection
 from core.state import MapState
 
 logger = logging.getLogger(__name__)
@@ -113,6 +113,7 @@ def mark_matcher(state: MapState) -> dict:
 # Prompt helpers
 # ------------------------------------------------------------------
 
+
 def _build_change_summary(manifest: ChangeManifest | None) -> str:
     """Build a concise summary of changes for the scoring prompt."""
     if not manifest or not manifest.changes:
@@ -131,6 +132,7 @@ def _build_change_summary(manifest: ChangeManifest | None) -> str:
 # ------------------------------------------------------------------
 # Parsing helpers
 # ------------------------------------------------------------------
+
 
 def _parse_scored_results(raw: dict | list) -> list[TestSelection]:
     """Convert agent JSON output into TestSelection objects."""
@@ -155,6 +157,7 @@ def _parse_scored_results(raw: dict | list) -> list[TestSelection]:
 # ------------------------------------------------------------------
 # Heuristic fallback
 # ------------------------------------------------------------------
+
 
 def _score_heuristic(
     manifest: ChangeManifest | None,

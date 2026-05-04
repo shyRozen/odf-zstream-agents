@@ -4,11 +4,11 @@ Uses the unified agent runner to reconcile and deduplicate changes from all
 three sources, cross-referencing Jira tickets with git commits and errata
 advisories.  Falls back to deterministic dedup when the agent is unavailable.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 
 from core.agent_runner import run_node_json
 from core.models import (
@@ -18,7 +18,6 @@ from core.models import (
     ChangeType,
     CoverageSummary,
     Severity,
-    StageError,
 )
 from core.state import InspectState
 
@@ -93,6 +92,7 @@ def merge_manifest(state: InspectState) -> dict:
 # Agent-powered merge
 # ------------------------------------------------------------------
 
+
 def _merge_with_agent(
     jira_changes: list[Change],
     errata_changes: list[Change],
@@ -101,6 +101,7 @@ def _merge_with_agent(
 ) -> list[Change]:
     """Use the agent runner to reconcile and deduplicate changes."""
     try:
+
         def changes_to_dicts(changes: list[Change]) -> list[dict]:
             return [c.model_dump(mode="json") for c in changes]
 
@@ -154,6 +155,7 @@ def _merge_with_agent(
 # ------------------------------------------------------------------
 # Deterministic fallback merge
 # ------------------------------------------------------------------
+
 
 def _merge_without_llm(
     jira_changes: list[Change],
@@ -211,6 +213,7 @@ def _merge_without_llm(
 # ------------------------------------------------------------------
 # Parsing helpers
 # ------------------------------------------------------------------
+
 
 def _parse_raw_changes(raw: dict | list) -> list[Change]:
     """Convert agent JSON output into a list of Change objects."""

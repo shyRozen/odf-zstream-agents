@@ -32,23 +32,26 @@ def list_tests(directory: str) -> str:
     tests_dir = root / "tests" / directory
 
     if not tests_dir.exists():
-        return json.dumps({
-            "error": f"Directory not found: {tests_dir}",
-            "ocs_ci_root": str(root),
-        })
+        return json.dumps(
+            {
+                "error": f"Directory not found: {tests_dir}",
+                "ocs_ci_root": str(root),
+            }
+        )
 
     try:
         test_files = sorted(
-            str(p.relative_to(root))
-            for p in tests_dir.rglob("test_*.py")
-            if p.is_file()
+            str(p.relative_to(root)) for p in tests_dir.rglob("test_*.py") if p.is_file()
         )
 
-        return json.dumps({
-            "directory": f"tests/{directory}",
-            "file_count": len(test_files),
-            "files": test_files,
-        }, indent=2)
+        return json.dumps(
+            {
+                "directory": f"tests/{directory}",
+                "file_count": len(test_files),
+                "files": test_files,
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to list tests: {str(exc)}"})
@@ -96,11 +99,13 @@ def read_test_marks(file_path: str) -> str:
 
             marks = _extract_marks(node.decorator_list)
 
-            test_functions.append({
-                "name": node.name,
-                "line": node.lineno,
-                "marks": marks,
-            })
+            test_functions.append(
+                {
+                    "name": node.name,
+                    "line": node.lineno,
+                    "marks": marks,
+                }
+            )
 
     # Also extract class-level marks for test classes
     class_marks = {}
@@ -108,12 +113,15 @@ def read_test_marks(file_path: str) -> str:
         if isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
             class_marks[node.name] = _extract_marks(node.decorator_list)
 
-    return json.dumps({
-        "file": str(path.relative_to(root)) if str(path).startswith(str(root)) else str(path),
-        "test_count": len(test_functions),
-        "tests": test_functions,
-        "class_marks": class_marks,
-    }, indent=2)
+    return json.dumps(
+        {
+            "file": str(path.relative_to(root)) if str(path).startswith(str(root)) else str(path),
+            "test_count": len(test_functions),
+            "tests": test_functions,
+            "class_marks": class_marks,
+        },
+        indent=2,
+    )
 
 
 def _extract_marks(decorators: list) -> list[dict]:
@@ -202,9 +210,11 @@ def squad_map_lookup(component: str) -> str:
     mapping = config.SQUAD_MAPPING
 
     if not mapping:
-        return json.dumps({
-            "error": "SQUAD_MAPPING not configured. Check config.yaml.",
-        })
+        return json.dumps(
+            {
+                "error": "SQUAD_MAPPING not configured. Check config.yaml.",
+            }
+        )
 
     # Normalize the component name for lookup
     component_lower = component.lower().strip()
@@ -212,17 +222,17 @@ def squad_map_lookup(component: str) -> str:
     # Direct match
     if component_lower in mapping:
         entry = mapping[component_lower]
-        return json.dumps({
-            "component": component_lower,
-            "squad": entry.get("squad", "unknown"),
-            "test_paths": entry.get("paths", []),
-        }, indent=2)
+        return json.dumps(
+            {
+                "component": component_lower,
+                "squad": entry.get("squad", "unknown"),
+                "test_paths": entry.get("paths", []),
+            },
+            indent=2,
+        )
 
     # Try partial/fuzzy match
-    matches = [
-        k for k in mapping
-        if component_lower in k or k in component_lower
-    ]
+    matches = [k for k in mapping if component_lower in k or k in component_lower]
 
     if matches:
         results = {}
@@ -232,15 +242,21 @@ def squad_map_lookup(component: str) -> str:
                 "squad": entry.get("squad", "unknown"),
                 "test_paths": entry.get("paths", []),
             }
-        return json.dumps({
-            "component_query": component,
-            "partial_matches": results,
-        }, indent=2)
+        return json.dumps(
+            {
+                "component_query": component,
+                "partial_matches": results,
+            },
+            indent=2,
+        )
 
-    return json.dumps({
-        "error": f"Component '{component}' not found in squad mapping",
-        "available_components": list(mapping.keys()),
-    }, indent=2)
+    return json.dumps(
+        {
+            "error": f"Component '{component}' not found in squad mapping",
+            "available_components": list(mapping.keys()),
+        },
+        indent=2,
+    )
 
 
 def read_test_source(file_path: str) -> str:
@@ -271,13 +287,18 @@ def read_test_source(file_path: str) -> str:
         truncated = total_lines > 200
         source = "\n".join(lines[:200])
 
-        return json.dumps({
-            "file": str(path.relative_to(root)) if str(path).startswith(str(root)) else str(path),
-            "total_lines": total_lines,
-            "lines_returned": min(total_lines, 200),
-            "truncated": truncated,
-            "source": source,
-        }, indent=2)
+        return json.dumps(
+            {
+                "file": (
+                    str(path.relative_to(root)) if str(path).startswith(str(root)) else str(path)
+                ),
+                "total_lines": total_lines,
+                "lines_returned": min(total_lines, 200),
+                "truncated": truncated,
+                "source": source,
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to read {path}: {str(exc)}"})

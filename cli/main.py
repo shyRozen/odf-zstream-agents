@@ -5,10 +5,10 @@ Usage::
     zstream run 4.16.2
     zstream status
 """
+
 from __future__ import annotations
 
 import json
-import sys
 
 import typer
 
@@ -31,16 +31,12 @@ def _parse_version(version: str) -> tuple[str, str]:
     """
     parts = version.split(".")
     if len(parts) != 3:
-        raise typer.BadParameter(
-            f"Version must be in X.Y.Z format, got '{version}'"
-        )
+        raise typer.BadParameter(f"Version must be in X.Y.Z format, got '{version}'")
 
     try:
         major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
     except ValueError:
-        raise typer.BadParameter(
-            f"Version components must be integers, got '{version}'"
-        )
+        raise typer.BadParameter(f"Version components must be integers, got '{version}'")
 
     if patch < 1:
         raise typer.BadParameter(
@@ -104,7 +100,10 @@ def run(
 
     coverage = final_state.get("coverage_report")
     if coverage:
-        typer.echo(f"  Coverage: {coverage.coverage_ratio:.0%} ({coverage.covered}/{coverage.total_changes})")
+        typer.echo(
+            f"  Coverage: {coverage.coverage_ratio:.0%} "
+            f"({coverage.covered}/{coverage.total_changes})"
+        )
 
     pr_url = final_state.get("pr_url")
     if pr_url:

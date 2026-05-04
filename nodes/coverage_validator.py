@@ -3,11 +3,11 @@
 Uses the unified agent runner to verify that selected tests adequately cover
 all z-stream changes.  Falls back to deterministic component-keyword matching.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 
 from core.agent_runner import run_node_json
 from core import config
@@ -15,7 +15,6 @@ from core.models import (
     ChangeManifest,
     CoverageReport,
     GapDetail,
-    StageError,
     TestSelection,
 )
 from core.state import MapState
@@ -95,6 +94,7 @@ def coverage_validator(state: MapState) -> dict:
 # ------------------------------------------------------------------
 # Coverage validation
 # ------------------------------------------------------------------
+
 
 def _validate_coverage(
     manifest: ChangeManifest,
@@ -184,6 +184,7 @@ def _validate_with_agent(
 # Deterministic fallback
 # ------------------------------------------------------------------
 
+
 def _validate_without_llm(
     manifest: ChangeManifest,
     selected: list[TestSelection],
@@ -196,8 +197,19 @@ def _validate_without_llm(
         path_lower = test.file_path.lower()
         reason_lower = test.reason.lower()
         for comp_keyword in [
-            "ocs", "odf", "ceph", "rook", "noobaa", "mcg",
-            "rgw", "pv", "csi", "ui", "console", "deploy", "upgrade",
+            "ocs",
+            "odf",
+            "ceph",
+            "rook",
+            "noobaa",
+            "mcg",
+            "rgw",
+            "pv",
+            "csi",
+            "ui",
+            "console",
+            "deploy",
+            "upgrade",
         ]:
             if comp_keyword in path_lower or comp_keyword in reason_lower:
                 covered_components.add(comp_keyword)
@@ -215,9 +227,7 @@ def _validate_without_llm(
 
     gaps = []
     for change in manifest.changes:
-        keywords = component_keywords.get(
-            change.component, [change.component.lower()]
-        )
+        keywords = component_keywords.get(change.component, [change.component.lower()])
         has_coverage = any(kw in covered_components for kw in keywords)
         if not has_coverage:
             gaps.append(

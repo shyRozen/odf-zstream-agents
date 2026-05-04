@@ -80,19 +80,21 @@ def save_pipeline_results(pipeline_id: str, version: str, results_json: str) -> 
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
                 """,
-                (pipeline_id, version, json.dumps(results_data),
-                 datetime.now(timezone.utc)),
+                (pipeline_id, version, json.dumps(results_data), datetime.now(timezone.utc)),
             )
             row_id = cur.fetchone()[0]
         conn.commit()
 
-        return json.dumps({
-            "status": "saved",
-            "id": row_id,
-            "pipeline_id": pipeline_id,
-            "version": version,
-            "message": f"Results saved (row {row_id})",
-        }, indent=2)
+        return json.dumps(
+            {
+                "status": "saved",
+                "id": row_id,
+                "pipeline_id": pipeline_id,
+                "version": version,
+                "message": f"Results saved (row {row_id})",
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to save results: {str(exc)}"})
@@ -148,18 +150,23 @@ def query_historical_results(version: str, lookback: int = 5) -> str:
 
         results = []
         for row in rows:
-            results.append({
-                "pipeline_id": row[0],
-                "version": row[1],
-                "results": row[2],
-                "created_at": row[3].isoformat() if row[3] else None,
-            })
+            results.append(
+                {
+                    "pipeline_id": row[0],
+                    "version": row[1],
+                    "results": row[2],
+                    "created_at": row[3].isoformat() if row[3] else None,
+                }
+            )
 
-        return json.dumps({
-            "version": version,
-            "count": len(results),
-            "results": results,
-        }, indent=2)
+        return json.dumps(
+            {
+                "version": version,
+                "count": len(results),
+                "results": results,
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to query results: {str(exc)}"})

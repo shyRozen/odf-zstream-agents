@@ -20,6 +20,7 @@ RUNTIME = config.get("llm.runtime", "claude-code")
 # Claude Code CLI backend
 # ---------------------------------------------------------------------------
 
+
 def _run_claude_code(
     prompt: str,
     *,
@@ -32,8 +33,10 @@ def _run_claude_code(
     cmd = [
         "claude",
         "--print",
-        "--model", model,
-        "--max-turns", str(max_turns),
+        "--model",
+        model,
+        "--max-turns",
+        str(max_turns),
     ]
 
     if allowed_tools:
@@ -69,6 +72,7 @@ def _run_claude_code(
 # ---------------------------------------------------------------------------
 # LiteLLM backend
 # ---------------------------------------------------------------------------
+
 
 def _litellm_model(short_name: str) -> str:
     """Map short names to full LiteLLM model identifiers."""
@@ -107,6 +111,7 @@ def _run_litellm(
 # Public API — nodes call these
 # ---------------------------------------------------------------------------
 
+
 def run_node(
     prompt: str,
     node_name: str,
@@ -131,8 +136,14 @@ def run_node(
 
     if active_runtime == "claude-code":
         cc_config = config.get("llm.claude_code", {}) or {}
-        model = config.get("llm.opus_model", "opus") if is_opus else config.get("llm.default_model", "sonnet")
-        timeout = timeout_seconds or (cc_config.get("opus_timeout", 300) if is_opus else cc_config.get("default_timeout", 120))
+        model = (
+            config.get("llm.opus_model", "opus")
+            if is_opus
+            else config.get("llm.default_model", "sonnet")
+        )
+        timeout = timeout_seconds or (
+            cc_config.get("opus_timeout", 300) if is_opus else cc_config.get("default_timeout", 120)
+        )
         max_turns = cc_config.get("max_turns", 10)
 
         return _run_claude_code(

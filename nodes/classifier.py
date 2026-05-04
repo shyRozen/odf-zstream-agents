@@ -4,17 +4,16 @@ NO LLM — deterministic node that parses junit_results and classifies
 each test by its status (PASS/FAIL/ERROR/SKIP) using simple pattern
 matching on error messages.
 """
+
 from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime
 
 from core.models import (
     FailureAnalysis,
     FailureType,
     JUnitResults,
-    StageError,
     TestResult,
 )
 from core.state import AnalyzeState
@@ -209,15 +208,11 @@ def _compute_confidence(test: TestResult, failure_type: FailureType) -> float:
 
     if failure_type == FailureType.INFRA_ISSUE:
         # Count how many infra patterns match
-        matches = sum(
-            1 for p in INFRA_PATTERNS if re.search(p, error_msg, re.IGNORECASE)
-        )
+        matches = sum(1 for p in INFRA_PATTERNS if re.search(p, error_msg, re.IGNORECASE))
         return min(0.5 + 0.1 * matches, 0.9)
 
     if failure_type == FailureType.TEST_BUG:
-        matches = sum(
-            1 for p in TEST_BUG_PATTERNS if re.search(p, error_msg, re.IGNORECASE)
-        )
+        matches = sum(1 for p in TEST_BUG_PATTERNS if re.search(p, error_msg, re.IGNORECASE))
         return min(0.5 + 0.1 * matches, 0.9)
 
     # Product bug — check if there are assertion errors (strong signal)

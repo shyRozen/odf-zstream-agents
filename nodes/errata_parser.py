@@ -4,9 +4,9 @@ Uses the unified agent runner to parse advisory content into structured
 Change objects.  Falls back to deterministic parsing when the agent is
 unavailable.
 """
+
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 
@@ -83,6 +83,7 @@ def errata_parser(state: InspectState) -> dict:
 # ------------------------------------------------------------------
 # Parsing helpers
 # ------------------------------------------------------------------
+
 
 def _parse_raw_changes(raw: dict | list) -> list[Change]:
     """Convert agent JSON output into a list of Change objects."""

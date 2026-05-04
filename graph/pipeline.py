@@ -6,6 +6,7 @@ pipeline:
 
     START -> inspect -> map_tests -> pr_builder -> jenkins -> analyze -> notify -> END
 """
+
 from __future__ import annotations
 
 from langgraph.graph import StateGraph, START, END
@@ -17,7 +18,6 @@ from graph.analyze import build_analyze_graph
 from nodes.pr_builder import pr_builder
 from nodes.jenkins_agent import jenkins_agent
 from nodes.notifier import notifier
-
 
 # ---------------------------------------------------------------------------
 # Sub-graph wrapper functions
@@ -104,6 +104,7 @@ def analyze_wrapper(state: PipelineState) -> dict:
 # Thin wrappers for standalone nodes that set current_stage
 # ---------------------------------------------------------------------------
 
+
 def pr_builder_node(state: PipelineState) -> dict:
     result = pr_builder(state)
     result["current_stage"] = "pr_builder"
@@ -125,6 +126,7 @@ def notify_node(state: PipelineState) -> dict:
 # ---------------------------------------------------------------------------
 # Pipeline builder
 # ---------------------------------------------------------------------------
+
 
 def build_pipeline():
     """Build and compile the top-level z-stream pipeline.

@@ -4,20 +4,20 @@ Uses the unified agent runner to generate a comprehensive markdown report
 and a concise Slack summary from all analysis data.  Falls back to a
 template-based report.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 from datetime import datetime
 
-from core.agent_runner import run_node, run_node_json
+from core.agent_runner import run_node_json
 from core.models import (
     AnalysisReport,
     ChangeManifest,
     FailureAnalysis,
     JUnitResults,
     RegressionInfo,
-    StageError,
 )
 from core.state import AnalyzeState
 
@@ -50,9 +50,7 @@ def report_generator(state: AnalyzeState) -> dict:
         logger.error("Agent report generation failed: %s", e)
 
     # Fallback to template-based report
-    report = _generate_template(
-        junit_results, classifications, regressions, manifest, pass_rate
-    )
+    report = _generate_template(junit_results, classifications, regressions, manifest, pass_rate)
 
     logger.info("Report generated: pass_rate=%.1f%%", pass_rate * 100)
     return {"analysis_report": report}
@@ -61,6 +59,7 @@ def report_generator(state: AnalyzeState) -> dict:
 # ------------------------------------------------------------------
 # Agent-powered report generation
 # ------------------------------------------------------------------
+
 
 def _generate_with_agent(
     junit_results: JUnitResults | None,
@@ -149,6 +148,7 @@ def _generate_with_agent(
 # Template fallback
 # ------------------------------------------------------------------
 
+
 def _generate_template(
     junit_results: JUnitResults | None,
     classifications: list[FailureAnalysis],
@@ -177,12 +177,14 @@ def _generate_template(
     md_lines.append("")
 
     # Test results overview
-    md_lines.extend([
-        "## Test Results",
-        "",
-        "| Metric | Count |",
-        "|--------|-------|",
-    ])
+    md_lines.extend(
+        [
+            "## Test Results",
+            "",
+            "| Metric | Count |",
+            "|--------|-------|",
+        ]
+    )
     if junit_results:
         md_lines.append(f"| Total | {junit_results.total} |")
         md_lines.append(f"| Passed | {junit_results.passed} |")
@@ -197,12 +199,14 @@ def _generate_template(
 
     # Failure classifications
     if classifications:
-        md_lines.extend([
-            "## Failure Analysis",
-            "",
-            "| Test | Type | Root Cause | Confidence | Bug |",
-            "|------|------|------------|------------|-----|",
-        ])
+        md_lines.extend(
+            [
+                "## Failure Analysis",
+                "",
+                "| Test | Type | Root Cause | Confidence | Bug |",
+                "|------|------|------------|------------|-----|",
+            ]
+        )
         for c in classifications:
             bug = c.linked_bug or "-"
             root_short = c.root_cause[:80] + "..." if len(c.root_cause) > 80 else c.root_cause
@@ -216,58 +220,65 @@ def _generate_template(
         product_bugs = sum(1 for c in classifications if c.failure_type.value == "product_bug")
         test_bugs = sum(1 for c in classifications if c.failure_type.value == "test_bug")
         infra_issues = sum(1 for c in classifications if c.failure_type.value == "infra_issue")
-        md_lines.extend([
-            "### Failure Breakdown",
-            "",
-            f"- Product bugs: {product_bugs}",
-            f"- Test bugs: {test_bugs}",
-            f"- Infrastructure issues: {infra_issues}",
-            "",
-        ])
+        md_lines.extend(
+            [
+                "### Failure Breakdown",
+                "",
+                f"- Product bugs: {product_bugs}",
+                f"- Test bugs: {test_bugs}",
+                f"- Infrastructure issues: {infra_issues}",
+                "",
+            ]
+        )
 
     # Regressions
     if regressions:
-        md_lines.extend([
-            "## Regressions",
-            "",
-            f"**{len(regressions)} new regression(s) detected:**",
-            "",
-            "| Test | Current | Previous | First Failed |",
-            "|------|---------|----------|--------------|",
-        ])
+        md_lines.extend(
+            [
+                "## Regressions",
+                "",
+                f"**{len(regressions)} new regression(s) detected:**",
+                "",
+                "| Test | Current | Previous | First Failed |",
+                "|------|---------|----------|--------------|",
+            ]
+        )
         for r in regressions:
             first_failed = r.first_failed_version or "-"
             md_lines.append(
-                f"| {r.test_name} | {r.current_status} | "
-                f"{r.previous_status} | {first_failed} |"
+                f"| {r.test_name} | {r.current_status} | " f"{r.previous_status} | {first_failed} |"
             )
         md_lines.append("")
     else:
-        md_lines.extend([
-            "## Regressions",
-            "",
-            "No new regressions detected.",
-            "",
-        ])
+        md_lines.extend(
+            [
+                "## Regressions",
+                "",
+                "No new regressions detected.",
+                "",
+            ]
+        )
 
     # Recommendations
-    recommendations = _generate_recommendations(
-        classifications, regressions, pass_rate
-    )
+    recommendations = _generate_recommendations(classifications, regressions, pass_rate)
 
     if recommendations:
-        md_lines.extend([
-            "## Recommendations",
-            "",
-        ])
+        md_lines.extend(
+            [
+                "## Recommendations",
+                "",
+            ]
+        )
         for rec in recommendations:
             md_lines.append(f"- {rec}")
         md_lines.append("")
 
-    md_lines.extend([
-        "---",
-        f"*Report generated at {datetime.utcnow().isoformat()}Z*",
-    ])
+    md_lines.extend(
+        [
+            "---",
+            f"*Report generated at {datetime.utcnow().isoformat()}Z*",
+        ]
+    )
 
     markdown_report = "\n".join(md_lines)
 
@@ -335,13 +346,12 @@ def _generate_recommendations(
 
     if infra_issues:
         recommendations.append(
-            f"Address {len(infra_issues)} infrastructure issue(s) and consider retrying affected tests."
+            f"Address {len(infra_issues)} infrastructure issue(s) "
+            f"and consider retrying affected tests."
         )
 
     if test_bugs:
-        recommendations.append(
-            f"Fix {len(test_bugs)} test bug(s) to improve test reliability."
-        )
+        recommendations.append(f"Fix {len(test_bugs)} test bug(s) to improve test reliability.")
 
     if pass_rate < 0.80:
         recommendations.append(

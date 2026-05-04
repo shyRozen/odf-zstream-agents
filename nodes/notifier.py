@@ -3,6 +3,7 @@
 NO LLM — deterministic node that posts the analysis report via
 Slack webhook and as a GitHub PR comment.
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,7 +22,6 @@ def notifier(state: PipelineState) -> dict:
     """
     report: AnalysisReport | None = state.get("analysis_report")
     pr_number = state.get("pr_number", 0)
-    pr_url = state.get("pr_url", "")
 
     if not report:
         logger.warning("No analysis report to send")

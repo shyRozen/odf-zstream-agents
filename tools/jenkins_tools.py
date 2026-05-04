@@ -64,12 +64,15 @@ def jenkins_trigger_build(job_name: str, parameters: str) -> str:
 
         queue_number = server.build_job(job_name, parameters=merged_params)
 
-        return json.dumps({
-            "job_name": job_name,
-            "queue_number": queue_number,
-            "parameters": merged_params,
-            "message": f"Build queued for '{job_name}' (queue #{queue_number})",
-        }, indent=2)
+        return json.dumps(
+            {
+                "job_name": job_name,
+                "queue_number": queue_number,
+                "parameters": merged_params,
+                "message": f"Build queued for '{job_name}' (queue #{queue_number})",
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to trigger build: {str(exc)}"})
@@ -153,12 +156,14 @@ def jenkins_get_test_report(job_name: str, build_number: int) -> str:
         except Exception as exc:
             error_msg = str(exc)
             if "404" in error_msg or "Not Found" in error_msg:
-                return json.dumps({
-                    "error": "No test report available for this build",
-                    "job_name": job_name,
-                    "build_number": build_number,
-                    "note": "The build may still be running or didn't produce JUnit results",
-                })
+                return json.dumps(
+                    {
+                        "error": "No test report available for this build",
+                        "job_name": job_name,
+                        "build_number": build_number,
+                        "note": "The build may still be running or didn't produce JUnit results",
+                    }
+                )
             raise
 
         # Extract summary
@@ -172,14 +177,16 @@ def jenkins_get_test_report(job_name: str, build_number: int) -> str:
         for suite in report.get("suites", []):
             for case in suite.get("cases", []):
                 if case.get("status") in ("FAILED", "REGRESSION", "ERROR"):
-                    failed_tests.append({
-                        "name": case.get("name", ""),
-                        "class_name": case.get("className", ""),
-                        "status": case.get("status", ""),
-                        "duration": case.get("duration", 0),
-                        "error_message": (case.get("errorDetails", "") or "")[:500],
-                        "error_stacktrace": (case.get("errorStackTrace", "") or "")[:1000],
-                    })
+                    failed_tests.append(
+                        {
+                            "name": case.get("name", ""),
+                            "class_name": case.get("className", ""),
+                            "status": case.get("status", ""),
+                            "duration": case.get("duration", 0),
+                            "error_message": (case.get("errorDetails", "") or "")[:500],
+                            "error_stacktrace": (case.get("errorStackTrace", "") or "")[:1000],
+                        }
+                    )
 
         result = {
             "job_name": job_name,
@@ -226,13 +233,16 @@ def jenkins_get_console_log(job_name: str, build_number: int) -> str:
         if truncated:
             output = output[-max_chars:]
 
-        return json.dumps({
-            "job_name": job_name,
-            "build_number": build_number,
-            "truncated": truncated,
-            "total_length": len(output) if not truncated else f">{max_chars}",
-            "console_output": output,
-        }, indent=2)
+        return json.dumps(
+            {
+                "job_name": job_name,
+                "build_number": build_number,
+                "truncated": truncated,
+                "total_length": len(output) if not truncated else f">{max_chars}",
+                "console_output": output,
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to get console log: {str(exc)}"})

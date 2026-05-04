@@ -49,20 +49,25 @@ def github_create_branch(branch_name: str, base_branch: str = "master") -> str:
         ref_name = f"refs/heads/{branch_name}"
         repo.create_git_ref(ref=ref_name, sha=base_sha)
 
-        return json.dumps({
-            "branch": branch_name,
-            "base_branch": base_branch,
-            "sha": base_sha,
-            "message": f"Branch '{branch_name}' created from '{base_branch}'",
-        }, indent=2)
+        return json.dumps(
+            {
+                "branch": branch_name,
+                "base_branch": base_branch,
+                "sha": base_sha,
+                "message": f"Branch '{branch_name}' created from '{base_branch}'",
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         error_msg = str(exc)
         if "Reference already exists" in error_msg:
-            return json.dumps({
-                "error": f"Branch '{branch_name}' already exists",
-                "suggestion": "Use a different branch name or delete the existing branch first",
-            })
+            return json.dumps(
+                {
+                    "error": f"Branch '{branch_name}' already exists",
+                    "suggestion": "Use a different branch name or delete the existing branch first",
+                }
+            )
         return json.dumps({"error": f"Failed to create branch: {error_msg}"})
 
 
@@ -90,9 +95,11 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
         try:
             file_content = repo.get_contents(file_path, ref=branch)
         except Exception:
-            return json.dumps({
-                "error": f"File '{file_path}' not found on branch '{branch}'",
-            })
+            return json.dumps(
+                {
+                    "error": f"File '{file_path}' not found on branch '{branch}'",
+                }
+            )
 
         content = file_content.decoded_content.decode("utf-8")
         lines = content.split("\n")
@@ -100,9 +107,7 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
         mark_decorator = f"@pytest.mark.{mark_name}"
 
         # Check if pytest import exists, add if needed
-        has_pytest_import = any(
-            "import pytest" in line for line in lines
-        )
+        has_pytest_import = any("import pytest" in line for line in lines)
 
         new_lines = []
         if not has_pytest_import:
@@ -110,9 +115,7 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
             import_inserted = False
             for line in lines:
                 new_lines.append(line)
-                if not import_inserted and (
-                    line.startswith("import ") or line.startswith("from ")
-                ):
+                if not import_inserted and (line.startswith("import ") or line.startswith("from ")):
                     # Keep going to find the last import
                     pass
             # Simpler: just add at the top after existing imports
@@ -121,12 +124,17 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
             past_imports = False
             for line in lines:
                 if not past_imports and not inserted:
-                    if line.strip() and not line.startswith("import ") and \
-                       not line.startswith("from ") and not line.startswith("#") and \
-                       not line.startswith('"""') and not line.startswith("'''") and \
-                       line.strip() != "":
+                    if (
+                        line.strip()
+                        and not line.startswith("import ")
+                        and not line.startswith("from ")
+                        and not line.startswith("#")
+                        and not line.startswith('"""')
+                        and not line.startswith("'''")
+                        and line.strip() != ""
+                    ):
                         # We're past the import block
-                        if not any("import pytest" in l for l in new_lines):
+                        if not any("import pytest" in line for line in new_lines):
                             new_lines.append("import pytest")
                             new_lines.append("")
                             inserted = True
@@ -145,7 +153,7 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
 
             # Detect test function definitions
             stripped = line.lstrip()
-            if (stripped.startswith("def test_") or stripped.startswith("async def test_")):
+            if stripped.startswith("def test_") or stripped.startswith("async def test_"):
                 # Check if the mark is already present in preceding decorators
                 has_mark = False
                 j = i - 1
@@ -164,11 +172,17 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
             i += 1
 
         if marks_added == 0:
-            return json.dumps({
-                "message": f"No modifications needed - mark '{mark_name}' already present or no test functions found",
-                "file": file_path,
-                "branch": branch,
-            })
+            return json.dumps(
+                {
+                    "message": (
+                        f"No modifications needed - mark "
+                        f"'{mark_name}' already present "
+                        f"or no test functions found"
+                    ),
+                    "file": file_path,
+                    "branch": branch,
+                }
+            )
 
         new_content = "\n".join(modified_lines)
 
@@ -182,14 +196,17 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
             branch=branch,
         )
 
-        return json.dumps({
-            "file": file_path,
-            "branch": branch,
-            "marks_added": marks_added,
-            "mark_name": mark_name,
-            "commit_sha": result["commit"].sha,
-            "message": f"Added {mark_decorator} to {marks_added} test(s)",
-        }, indent=2)
+        return json.dumps(
+            {
+                "file": file_path,
+                "branch": branch,
+                "marks_added": marks_added,
+                "mark_name": mark_name,
+                "commit_sha": result["commit"].sha,
+                "message": f"Added {mark_decorator} to {marks_added} test(s)",
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to add marks: {str(exc)}"})
@@ -220,22 +237,27 @@ def github_create_pr(branch: str, title: str, body: str) -> str:
             base="master",
         )
 
-        return json.dumps({
-            "pr_number": pr.number,
-            "url": pr.html_url,
-            "title": pr.title,
-            "state": pr.state,
-            "branch": branch,
-            "message": f"PR #{pr.number} created successfully",
-        }, indent=2)
+        return json.dumps(
+            {
+                "pr_number": pr.number,
+                "url": pr.html_url,
+                "title": pr.title,
+                "state": pr.state,
+                "branch": branch,
+                "message": f"PR #{pr.number} created successfully",
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         error_msg = str(exc)
         if "A pull request already exists" in error_msg:
-            return json.dumps({
-                "error": f"A PR already exists for branch '{branch}'",
-                "suggestion": "Check existing PRs or use a different branch",
-            })
+            return json.dumps(
+                {
+                    "error": f"A PR already exists for branch '{branch}'",
+                    "suggestion": "Check existing PRs or use a different branch",
+                }
+            )
         return json.dumps({"error": f"Failed to create PR: {error_msg}"})
 
 
@@ -260,11 +282,14 @@ def github_comment_pr(pr_number: int, comment: str) -> str:
         pr = repo.get_pull(pr_number)
         issue_comment = pr.create_issue_comment(comment)
 
-        return json.dumps({
-            "pr_number": pr_number,
-            "comment_id": issue_comment.id,
-            "message": f"Comment posted on PR #{pr_number}",
-        }, indent=2)
+        return json.dumps(
+            {
+                "pr_number": pr_number,
+                "comment_id": issue_comment.id,
+                "message": f"Comment posted on PR #{pr_number}",
+            },
+            indent=2,
+        )
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to comment on PR #{pr_number}: {str(exc)}"})
