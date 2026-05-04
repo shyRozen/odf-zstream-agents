@@ -64,17 +64,29 @@ Pipeline Orchestrator (top-level StateGraph)
 └── pyproject.toml # Dependencies
 ```
 
+### Runtime Architecture Change
+
+LLM nodes now run through a **dual-runtime** architecture via `core/agent_runner.py`:
+
+- **Default**: Claude Code CLI (`claude --print`). Each agent node gets configurable tool access via `--allowedTools` (Read, Bash, WebSearch, WebFetch). No `ANTHROPIC_API_KEY` needed — the CLI handles its own auth.
+- **Fallback**: LiteLLM. Selected via `llm.runtime: litellm` in config, or auto-selected if the `claude` CLI is not installed. Supports GPT, Ollama, and any LiteLLM-compatible provider.
+
+Nodes call `run_node(prompt, node_name)` — runtime and model selection is automatic based on config. The 5 deterministic nodes (git_diff, jenkins_agent, classifier, notifier, merge fallback) still use no LLM/agent at all.
+
 ### Key Technical Decisions Made During Implementation
 
 | Decision | Why |
 |----------|-----|
+| Claude Code CLI as default runtime | Agents get tool access (Read, Bash, WebSearch) via `--allowedTools`. No API key management needed. Falls back to LiteLLM if CLI not found |
+| Unified `run_node()` API | Nodes don't know which runtime they're using. `run_node(prompt, node_name)` handles model routing, timeouts, and tool access automatically |
 | Plain functions + separate `_tool` wrappers | `@tool` decorator wraps functions in `StructuredTool` objects that aren't directly callable. Nodes call raw functions; `_tool` variants exist for future ReAct agent use |
-| Direct LLM calls, not ReAct agents | Simpler and more predictable. Each node builds a structured prompt, calls `llm.invoke()`, parses the JSON response. Deterministic fallback if LLM fails |
 | JSON string returns from all tools | Tools return serialized JSON strings so both LLM agents and direct callers can consume them. Nodes parse with `json.loads()` |
 | Every LLM node has a deterministic fallback | If the LLM is unavailable (no API key, rate limit, error), nodes produce reasonable output using regex, heuristics, and templates |
 | `Annotated[list, add]` reducers for error lists | Errors from parallel sub-graph nodes get merged automatically by LangGraph's reducer system, not overwritten |
 
 ### Tools Implemented
+
+In claude-code mode, LLM nodes no longer call tool functions directly. Instead, they delegate to the Claude Code agent via `allowed_tools` — the agent reads files, runs shell commands, and searches the web as needed. The tool modules below are still used by deterministic nodes and as the LiteLLM-mode fallback.
 
 | Module | Functions | External Service |
 |--------|-----------|-----------------|
@@ -103,6 +115,12 @@ python -c "from graph.pipeline import build_pipeline; build_pipeline()"
 
 # All modules import
 python -c "from tools import jira_tools, errata_tools, git_tools, ocs_ci_tools, github_tools, jenkins_tools, slack_tools, db_tools"
+
+# Agent runner imports and detects runtime
+python -c "from core.agent_runner import RUNTIME; print(f'Runtime: {RUNTIME}')"
+
+# Verify claude CLI is available (for claude-code runtime)
+claude --version
 
 # End-to-end run (degrades gracefully without API keys)
 zstream run 4.16.2

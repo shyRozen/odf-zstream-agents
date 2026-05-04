@@ -18,11 +18,13 @@ The pipeline runs end-to-end (`zstream run 4.16.2`) with all 14 nodes, 3 sub-gra
 
 | Credential | Where | How to Get |
 |------------|-------|-----------|
-| `ANTHROPIC_API_KEY` | `.env` | Anthropic console — needed for all LLM nodes (9 of 14 nodes use an LLM) |
+| `ANTHROPIC_API_KEY` | `.env` | **Not needed for claude-code runtime** (CLI handles its own auth). Only required if using `llm.runtime: litellm` |
 | `JIRA_API_TOKEN` | `.env` | Jira Cloud → Profile → API Tokens. Also set `JIRA_URL` and `JIRA_EMAIL` |
 | `JENKINS_API_TOKEN` | `.env` | Jenkins → User → Configure → API Token. Also set `JENKINS_URL` and `JENKINS_USER` |
 | `GITHUB_TOKEN` | `.env` | GitHub → Settings → Developer Settings → PAT. Needs repo write access to ocs-ci |
 | `SLACK_WEBHOOK_URL` | `.env` | Slack → Apps → Incoming Webhooks → Add to channel |
+
+> **Note**: With the default `claude-code` runtime, ensure the `claude` CLI is installed and authenticated. To use a different LLM provider (GPT, Ollama), set `llm.runtime: litellm` in `config.yaml` and provide the appropriate API key.
 
 **Action**: Copy `.env.example` to `.env`, fill in real values, test each tool individually:
 ```bash
@@ -59,18 +61,20 @@ python -c "from tools.jenkins_tools import jenkins_get_build_status; print(jenki
 **Priority**: High
 **Why**: LLM nodes ship with generic prompts. Real data reveals what the model misunderstands about your domain.
 
+With the claude-code runtime, tuning means adjusting the **prompt strings** passed to `run_node()` in each node's Python file. There are no separate system messages — the prompt _is_ the full instruction to the Claude Code agent.
+
 **Nodes to tune** (in priority order):
 
 ### 3a. Mark Matcher (Opus)
-The highest-value node — decides which tests run. The prompt needs:
+The highest-value node — decides which tests run. The prompt in `nodes/mark_matcher.py` needs:
 - Examples of what "relevant" means for your team (a ceph-csi fix should trigger PV tests, not MCG tests)
 - The scoring rubric (what makes a test score 0.9 vs 0.5?)
 - Edge cases (upgrade tests? performance tests? UI tests for backend fixes?)
 
-**How**: Run the pipeline, look at `scored_tests`, identify false positives/negatives, add few-shot examples to the system prompt in `nodes/mark_matcher.py`.
+**How**: Run the pipeline, look at `scored_tests`, identify false positives/negatives, add few-shot examples to the prompt string in `nodes/mark_matcher.py`.
 
 ### 3b. Root Cause Analyzer (Opus)
-Classifies failures as product_bug / test_bug / infra_issue. Needs:
+Classifies failures as product_bug / test_bug / infra_issue. The prompt in `nodes/root_cause.py` needs:
 - Examples of each failure type from your actual logs
 - Infra patterns specific to your environment (PSI timeouts, NFS mount failures, etc.)
 - Known flaky test patterns
@@ -82,6 +86,8 @@ Reconciles Jira + errata + git into one manifest. Needs:
 - Your Jira field names and conventions
 - How errata advisory IDs relate to Jira ticket IDs in your workflow
 - Component naming conventions (ceph-csi vs cephcsi vs CSI)
+
+> **LiteLLM note**: To switch to LiteLLM for cost control or to use different providers (GPT-4o, Ollama local models), set `llm.runtime: litellm` in `config.yaml` and provide the relevant API key. Model names change to full identifiers (e.g., `claude-sonnet-4-6`, `gpt-4o`).
 
 ---
 

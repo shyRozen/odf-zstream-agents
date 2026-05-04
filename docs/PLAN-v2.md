@@ -307,24 +307,24 @@ def notify_node(state: PipelineState) -> PipelineState:
 
 ## LLM Allocation Per Node
 
-Not every node needs an LLM. Not every LLM call needs the most expensive model.
+Not every node needs an LLM. Not every LLM call needs the most expensive model. Nodes call `run_node(prompt, node_name)` — the unified runner selects the runtime (Claude Code CLI or LiteLLM) and model automatically. In Claude Code mode, per-node tool access is configured via `allowed_tools`.
 
-| Node | Model | Why |
-|------|-------|-----|
-| Jira Inspector | Sonnet | Extraction from structured API data — fast, cheap |
-| Errata Parser | Sonnet | Same — parsing structured advisories |
-| Git Diff Analyzer | **None** | Deterministic git commands, no LLM needed |
-| Merge & Cross-Ref | Sonnet | Reconcile 3 data sources, flag conflicts |
-| Code Analyzer | Sonnet | Map components to test dirs using known mapping table |
-| Mark Matcher | **Opus** | Needs deep understanding of test code vs. bug description to score relevance |
-| Coverage Validator | Sonnet | Gap analysis against manifest — structured comparison |
-| PR Builder | Sonnet | Generate PR description — templated |
-| Jenkins Agent | **None** | Pure API calls — no LLM |
-| Pass/Fail Classifier | **None** | Parse JUnit XML — deterministic |
-| Root Cause Analyzer | **Opus** | Deep reasoning: read log + source + change → classify failure cause |
-| Regression Detector | Sonnet | Compare current vs. historical results — structured |
-| Report Generator | Sonnet | Aggregate and format — templated with some narrative |
-| Notify | **None** | Template-based channel posting |
+| Node | Model | allowed_tools (claude-code mode) | Why |
+|------|-------|----------------------------------|-----|
+| Jira Inspector | Sonnet | `allowed_tools_with_web` | Extraction from structured API data — fast, cheap |
+| Errata Parser | Sonnet | `allowed_tools_with_web` | Same — parsing structured advisories |
+| Git Diff Analyzer | **None** | N/A | Deterministic git commands, no LLM needed |
+| Merge & Cross-Ref | Sonnet | `allowed_tools_default` | Reconcile 3 data sources, flag conflicts |
+| Code Analyzer | Sonnet | `allowed_tools_with_files` | Map components to test dirs using known mapping table |
+| Mark Matcher | **Opus** | `allowed_tools_with_files` | Needs deep understanding of test code vs. bug description to score relevance |
+| Coverage Validator | Sonnet | `allowed_tools_default` | Gap analysis against manifest — structured comparison |
+| PR Builder | Sonnet | `allowed_tools_default` | Generate PR description — templated |
+| Jenkins Agent | **None** | N/A | Pure API calls — no LLM |
+| Pass/Fail Classifier | **None** | N/A | Parse JUnit XML — deterministic |
+| Root Cause Analyzer | **Opus** | `allowed_tools_with_files` | Deep reasoning: read log + source + change → classify failure cause |
+| Regression Detector | Sonnet | `allowed_tools_default` | Compare current vs. historical results — structured |
+| Report Generator | Sonnet | `allowed_tools_default` | Aggregate and format — templated with some narrative |
+| Notify | **None** | N/A | Template-based channel posting |
 
 **Summary**: 14 nodes. 5 need no LLM. 7 use Sonnet. 2 use Opus (the two highest-value reasoning tasks).
 
@@ -335,7 +335,7 @@ Not every node needs an LLM. Not every LLM call needs the most expensive model.
 | Layer | Technology | Why |
 |-------|-----------|-----|
 | **Everything agent** | **LangGraph** | Orchestration, sub-graphs, fan-out/in, state, retry — one framework for all patterns |
-| LLM abstraction | **LiteLLM** | Unified API for Claude + GPT + Ollama. Route Sonnet vs. Opus per node |
+| LLM runtime | **Claude Code CLI** (default) / **LiteLLM** (fallback) | Claude Code gives agents tool access (Read, Bash, WebSearch) via `--allowedTools`. LiteLLM for GPT/Ollama/other providers. Config switch: `llm.runtime` |
 | State | **PostgreSQL** | Pipeline runs, historical results, regression baselines |
 | Cache | **Redis** | LLM response cache, rate limiting |
 | API | **FastAPI** | Trigger pipeline, check status, view results |
@@ -368,7 +368,7 @@ odf-zstream-agents/
 │   ├── config.py                # Pipeline & LLM config
 │   ├── models.py                # Pydantic: ChangeManifest, TestSelection, AnalysisReport
 │   ├── state.py                 # PipelineState TypedDict
-│   └── llm.py                   # LiteLLM client (model routing per node)
+│   └── agent_runner.py          # run_node() → Claude Code CLI or LiteLLM
 │
 ├── graph/
 │   ├── pipeline.py              # Top-level orchestrator graph
@@ -536,11 +536,9 @@ $ zstream run 4.16.2
 ### Environment Variables
 
 ```bash
-# LLM Providers
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-LITELLM_DEFAULT_MODEL=claude-sonnet-4-6
-LITELLM_OPUS_MODEL=claude-opus-4-7
+# LLM Providers (only needed for litellm runtime — claude-code handles its own auth)
+ANTHROPIC_API_KEY=sk-ant-...       # Only if llm.runtime=litellm
+OPENAI_API_KEY=sk-...              # Only if using GPT models via litellm
 
 # Jira Cloud
 JIRA_URL=https://your-org.atlassian.net
@@ -607,12 +605,22 @@ analysis:
   root_cause_confidence_threshold: 0.7
 
 llm:
-  default_model: claude-sonnet-4-6
+  runtime: claude-code            # "claude-code" (default) or "litellm"
+  default_model: sonnet           # claude-code: sonnet/opus/haiku. litellm: full model ID
+  opus_model: opus
   opus_nodes:
     - mark_matcher
     - root_cause
+  no_llm_nodes: [git_diff, jenkins_agent, classifier, notifier]
   temperature: 0.1
   max_tokens: 4096
+  claude_code:
+    max_turns: 10
+    default_timeout: 120
+    opus_timeout: 300
+    allowed_tools_default: []
+    allowed_tools_with_files: ["Read", "Bash(find*)", "Bash(grep*)", "Bash(cat*)"]
+    allowed_tools_with_web: ["Read", "Bash(curl*)", "WebSearch", "WebFetch"]
 ```
 
 ---
@@ -624,7 +632,8 @@ llm:
 | Single framework | LangGraph only | No stage actually needed swarm behavior. All patterns (fan-out, retry, DAG) are native to LangGraph |
 | Hierarchical sub-graphs | Manager → Agent nodes | Clean separation of concerns. Each manager owns its stage logic. Easy to test in isolation |
 | No message bus | LangGraph state passing | Agents are in the same process. State is a TypedDict passed between nodes. No serialization overhead |
-| LiteLLM for routing | Per-node model selection | Mark Matcher and Root Cause need Opus. Everything else uses Sonnet. 5 nodes need no LLM at all |
+| Claude Code CLI default | `claude --print` as primary runtime | Agents get tool access (Read, Bash, WebSearch) via `--allowedTools`. No API key needed. Falls back to LiteLLM if CLI not found |
+| LiteLLM as fallback | Alternative runtime for non-Claude providers | Enables GPT, Ollama, or other models. Selected via `llm.runtime: litellm` in config |
 | LangSmith over OTel | Native LangGraph tracing | LangSmith understands graph structure, shows node-by-node traces. OTel would need custom instrumentation |
 | No Slack bot framework | Direct webhook POST | Notify node sends one message. Doesn't need event handling, slash commands, or interactive messages |
 | PostgreSQL only | Drop Redis for MVP | LLM caching is nice-to-have. Start with Postgres for pipeline state + historical results. Add Redis later if needed |
