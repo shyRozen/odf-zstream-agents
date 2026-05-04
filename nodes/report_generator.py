@@ -1,7 +1,8 @@
-"""Report Generator node — produces the final analysis report.
+"""Report Generator node -- produces the final analysis report.
 
-Uses Sonnet to generate a comprehensive markdown report and a concise
-Slack summary from all analysis data.
+Uses the unified agent runner to generate a comprehensive markdown report
+and a concise Slack summary from all analysis data.  Falls back to a
+template-based report.
 """
 from __future__ import annotations
 
@@ -9,9 +10,7 @@ import json
 import logging
 from datetime import datetime
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from core.llm import get_llm
+from core.agent_runner import run_node, run_node_json
 from core.models import (
     AnalysisReport,
     ChangeManifest,
@@ -23,33 +22,6 @@ from core.models import (
 from core.state import AnalyzeState
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """\
-You are a QE report writer for ODF (OpenShift Data Foundation) z-stream releases.
-
-Generate two outputs from the analysis data:
-
-1. A **Markdown report** (detailed, suitable for GitHub PR comment or wiki) containing:
-   - Executive summary with pass rate and key findings
-   - Test results overview (total, pass, fail, error, skip)
-   - Failure analysis table with root causes and classifications
-   - Regression analysis section
-   - Recommendations for the team
-   - Table of all classified failures
-
-2. A **Slack summary** (concise, 3-5 lines max) with:
-   - Pass rate emoji indicator (green/yellow/red)
-   - Key numbers (total, passed, failed)
-   - Count of regressions if any
-   - One-line recommendation
-
-Output a JSON object with:
-- "markdown_report": the full markdown report string
-- "slack_summary": the concise Slack summary string
-- "recommendations": list of actionable recommendation strings
-
-Output ONLY the JSON object, no other text.
-"""
 
 
 def report_generator(state: AnalyzeState) -> dict:
@@ -67,17 +39,15 @@ def report_generator(state: AnalyzeState) -> dict:
     if junit_results and junit_results.total > 0:
         pass_rate = junit_results.passed / junit_results.total
 
-    # Try LLM-generated report
-    llm = get_llm("report_generator")
-    if llm is not None:
-        try:
-            report = _generate_with_llm(
-                llm, junit_results, classifications, regressions, manifest, pass_rate
-            )
-            if report:
-                return {"analysis_report": report}
-        except Exception as e:
-            logger.error("LLM report generation failed: %s", e)
+    # Try agent-generated report
+    try:
+        report = _generate_with_agent(
+            junit_results, classifications, regressions, manifest, pass_rate
+        )
+        if report:
+            return {"analysis_report": report}
+    except Exception as e:
+        logger.error("Agent report generation failed: %s", e)
 
     # Fallback to template-based report
     report = _generate_template(
@@ -88,15 +58,18 @@ def report_generator(state: AnalyzeState) -> dict:
     return {"analysis_report": report}
 
 
-def _generate_with_llm(
-    llm,
+# ------------------------------------------------------------------
+# Agent-powered report generation
+# ------------------------------------------------------------------
+
+def _generate_with_agent(
     junit_results: JUnitResults | None,
     classifications: list[FailureAnalysis],
     regressions: list[RegressionInfo],
     manifest: ChangeManifest | None,
     pass_rate: float,
 ) -> AnalysisReport | None:
-    """Generate report using LLM."""
+    """Generate report using the agent runner."""
     context = {
         "pass_rate": round(pass_rate, 3),
         "test_results": {
@@ -133,37 +106,48 @@ def _generate_with_llm(
     }
 
     prompt = (
-        f"Generate the analysis report from this data:\n\n"
-        f"{json.dumps(context, indent=2)}"
+        f"You are a QE report writer for ODF (OpenShift Data Foundation) "
+        f"z-stream releases.\n\n"
+        f"Generate two outputs from this analysis data:\n\n"
+        f"1. A **Markdown report** (detailed, suitable for GitHub PR comment "
+        f"   or wiki) containing:\n"
+        f"   - Executive summary with pass rate and key findings\n"
+        f"   - Test results overview (total, pass, fail, error, skip)\n"
+        f"   - Failure analysis table with root causes and classifications\n"
+        f"   - Regression analysis section\n"
+        f"   - Recommendations for the team\n\n"
+        f"2. A **Slack summary** (concise, 3-5 lines max) with:\n"
+        f"   - Pass rate emoji indicator (green/yellow/red circle)\n"
+        f"   - Key numbers (total, passed, failed)\n"
+        f"   - Count of regressions if any\n"
+        f"   - One-line recommendation\n\n"
+        f"Analysis data:\n{json.dumps(context, indent=2)}\n\n"
+        f"Return a JSON object with:\n"
+        f'- "markdown_report": the full markdown report string\n'
+        f'- "slack_summary": the concise Slack summary string\n'
+        f'- "recommendations": list of actionable recommendation strings\n\n'
+        f"Return ONLY the JSON object."
     )
 
-    response = llm.invoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=prompt),
-    ])
+    raw = run_node_json(prompt, "report_generator")
 
-    text = response.content.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
-
-    try:
-        result = json.loads(text)
-        return AnalysisReport(
-            pass_rate=pass_rate,
-            classifications=classifications,
-            regressions=regressions,
-            recommendations=result.get("recommendations", []),
-            markdown_report=result.get("markdown_report", ""),
-            slack_summary=result.get("slack_summary", ""),
-        )
-    except json.JSONDecodeError:
-        logger.error("Failed to parse report LLM response as JSON")
+    if raw is None or not isinstance(raw, dict):
+        logger.warning("Agent returned no parseable report result")
         return None
 
+    return AnalysisReport(
+        pass_rate=pass_rate,
+        classifications=classifications,
+        regressions=regressions,
+        recommendations=raw.get("recommendations", []),
+        markdown_report=raw.get("markdown_report", ""),
+        slack_summary=raw.get("slack_summary", ""),
+    )
+
+
+# ------------------------------------------------------------------
+# Template fallback
+# ------------------------------------------------------------------
 
 def _generate_template(
     junit_results: JUnitResults | None,
@@ -172,7 +156,7 @@ def _generate_template(
     manifest: ChangeManifest | None,
     pass_rate: float,
 ) -> AnalysisReport:
-    """Generate template-based report without LLM."""
+    """Generate template-based report without agent."""
     version = manifest.zstream_version if manifest else "unknown"
 
     # Build markdown report
@@ -340,13 +324,13 @@ def _generate_recommendations(
             )
         else:
             recommendations.append(
-                f"Review {len(product_bugs)} potential product bug(s) — confidence is low, "
+                f"Review {len(product_bugs)} potential product bug(s) -- confidence is low, "
                 f"manual verification recommended."
             )
 
     if regressions:
         recommendations.append(
-            f"Prioritize {len(regressions)} regression(s) — these tests were previously passing."
+            f"Prioritize {len(regressions)} regression(s) -- these tests were previously passing."
         )
 
     if infra_issues:
@@ -361,14 +345,14 @@ def _generate_recommendations(
 
     if pass_rate < 0.80:
         recommendations.append(
-            "Pass rate is below 80% — consider blocking the z-stream release until resolved."
+            "Pass rate is below 80% -- consider blocking the z-stream release until resolved."
         )
     elif pass_rate < 0.95:
         recommendations.append(
-            "Pass rate is below 95% — review failures before approving the z-stream release."
+            "Pass rate is below 95% -- review failures before approving the z-stream release."
         )
 
     if not recommendations:
-        recommendations.append("All tests passing — z-stream release is ready for approval.")
+        recommendations.append("All tests passing -- z-stream release is ready for approval.")
 
     return recommendations

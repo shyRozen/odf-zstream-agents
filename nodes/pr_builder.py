@@ -1,7 +1,8 @@
-"""PR Builder node — creates a GitHub PR with the selected tests.
+"""PR Builder node -- creates a GitHub PR with the selected tests.
 
-Uses Sonnet to generate a descriptive PR body. Calls GitHub tools to
-create a branch, add pytest marks, and open the PR.
+Uses the unified agent runner (run_node, not JSON) to generate a descriptive
+PR body.  Keeps direct calls to github_tools functions for branch/mark/PR
+creation.  Falls back to a template-based PR description.
 """
 from __future__ import annotations
 
@@ -9,29 +10,11 @@ import json
 import logging
 from datetime import datetime
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from core.llm import get_llm
+from core.agent_runner import run_node
 from core.models import ChangeManifest, StageError, TestSelection
 from core.state import PipelineState
 
 logger = logging.getLogger(__name__)
-
-PR_DESCRIPTION_PROMPT = """\
-You are writing a GitHub PR description for a z-stream test enablement PR.
-
-Given the z-stream version, change manifest, and list of selected tests,
-generate a clear PR description in Markdown format.
-
-Include:
-1. A summary of what this PR does (enables tests for z-stream validation)
-2. The z-stream version being tested
-3. A table or list of the changes being validated
-4. The number of tests being enabled
-5. Coverage statistics
-
-Output ONLY the Markdown PR body, no code fences.
-"""
 
 
 def pr_builder(state: PipelineState) -> dict:
@@ -165,31 +148,32 @@ def pr_builder(state: PipelineState) -> dict:
         }
 
 
+# ------------------------------------------------------------------
+# PR description generation
+# ------------------------------------------------------------------
+
 def _generate_pr_description(
     manifest: ChangeManifest | None,
     tests: list[TestSelection],
     version: str,
     marked_count: int,
 ) -> str:
-    """Generate a PR description using LLM or fallback template."""
-    llm = get_llm("pr_builder")
-    if llm is not None:
-        try:
-            return _generate_with_llm(llm, manifest, tests, version, marked_count)
-        except Exception as e:
-            logger.warning("LLM PR description failed: %s, using template", e)
+    """Generate a PR description using agent or fallback template."""
+    try:
+        return _generate_with_agent(manifest, tests, version, marked_count)
+    except Exception as e:
+        logger.warning("Agent PR description failed: %s, using template", e)
 
     return _generate_template(manifest, tests, version, marked_count)
 
 
-def _generate_with_llm(
-    llm,
+def _generate_with_agent(
     manifest: ChangeManifest | None,
     tests: list[TestSelection],
     version: str,
     marked_count: int,
 ) -> str:
-    """Generate PR description using LLM."""
+    """Generate PR description using the agent runner."""
     changes_summary = "No change manifest available."
     if manifest and manifest.changes:
         changes_data = [
@@ -204,18 +188,30 @@ def _generate_with_llm(
     ]
 
     prompt = (
-        f"Generate a PR description for z-stream {version}.\n\n"
+        f"You are writing a GitHub PR description for a z-stream test "
+        f"enablement PR.\n\n"
+        f"Generate a clear PR description in Markdown format for z-stream "
+        f"{version}.\n\n"
+        f"Include:\n"
+        f"1. A summary of what this PR does (enables tests for z-stream "
+        f"   validation)\n"
+        f"2. The z-stream version being tested\n"
+        f"3. A table or list of the changes being validated\n"
+        f"4. The number of tests being enabled\n"
+        f"5. Coverage statistics\n\n"
         f"Changes:\n{changes_summary}\n\n"
         f"Tests marked: {marked_count}\n"
-        f"Top tests:\n{json.dumps(test_summary, indent=2)}"
+        f"Top tests:\n{json.dumps(test_summary, indent=2)}\n\n"
+        f"Output ONLY the Markdown PR body, no code fences."
     )
 
-    response = llm.invoke([
-        SystemMessage(content=PR_DESCRIPTION_PROMPT),
-        HumanMessage(content=prompt),
-    ])
+    result = run_node(prompt, "pr_builder")
 
-    return response.content.strip()
+    # Validate we got something reasonable
+    if result and len(result) > 50 and not result.startswith("Agent"):
+        return result.strip()
+
+    raise ValueError(f"Agent returned unusable PR description: {result[:100]}")
 
 
 def _generate_template(
@@ -258,7 +254,7 @@ def _generate_template(
     lines.append("### Top Tests by Relevance")
     lines.append("")
     for t in tests[:10]:
-        lines.append(f"- `{t.test_node_id}` (score: {t.relevance_score:.2f}) — {t.reason}")
+        lines.append(f"- `{t.test_node_id}` (score: {t.relevance_score:.2f}) -- {t.reason}")
     if len(tests) > 10:
         lines.append(f"- ... and {len(tests) - 10} more")
 

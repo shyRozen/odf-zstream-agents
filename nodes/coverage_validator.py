@@ -1,7 +1,7 @@
-"""Coverage Validator node — checks test selection against change coverage.
+"""Coverage Validator node -- checks test selection against change coverage.
 
-Uses Sonnet to verify that selected tests adequately cover all z-stream
-changes. Identifies coverage gaps and returns a filtered test list.
+Uses the unified agent runner to verify that selected tests adequately cover
+all z-stream changes.  Falls back to deterministic component-keyword matching.
 """
 from __future__ import annotations
 
@@ -9,10 +9,8 @@ import json
 import logging
 from datetime import datetime
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
+from core.agent_runner import run_node_json
 from core import config
-from core.llm import get_llm
 from core.models import (
     ChangeManifest,
     CoverageReport,
@@ -23,27 +21,6 @@ from core.models import (
 from core.state import MapState
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """\
-You are a test coverage analyst for ODF (OpenShift Data Foundation) z-stream releases.
-
-Given a list of z-stream changes and scored test selections, determine:
-
-1. Which changes are adequately covered by the selected tests.
-2. Which changes have coverage gaps (no relevant test or only low-relevance tests).
-
-For each gap, provide:
-- change_id: the ID of the uncovered change
-- component: the component of the uncovered change
-- reason: why there's a gap (e.g., "no tests found for this component",
-  "only low-relevance tests available")
-
-Output a JSON object with:
-- "covered_change_ids": list of change IDs that have adequate test coverage
-- "gaps": list of {"change_id": str, "component": str, "reason": str}
-
-Output ONLY the JSON object, no other text.
-"""
 
 
 def coverage_validator(state: MapState) -> dict:
@@ -83,7 +60,7 @@ def coverage_validator(state: MapState) -> dict:
             "attempt_count": attempt,
         }
 
-    # Determine coverage using LLM or fallback
+    # Determine coverage using agent or fallback
     gap_details = _validate_coverage(manifest, selected)
 
     total = len(manifest.changes)
@@ -115,27 +92,28 @@ def coverage_validator(state: MapState) -> dict:
     }
 
 
+# ------------------------------------------------------------------
+# Coverage validation
+# ------------------------------------------------------------------
+
 def _validate_coverage(
     manifest: ChangeManifest,
     selected: list[TestSelection],
 ) -> list[GapDetail]:
-    """Validate coverage and return gap details."""
-    llm = get_llm("coverage_validator")
-    if llm is not None:
-        try:
-            return _validate_with_llm(llm, manifest, selected)
-        except Exception as e:
-            logger.error("LLM coverage validation failed: %s, using fallback", e)
+    """Validate coverage and return gap details, using agent then fallback."""
+    try:
+        return _validate_with_agent(manifest, selected)
+    except Exception as e:
+        logger.error("Agent coverage validation failed: %s, using fallback", e)
 
     return _validate_without_llm(manifest, selected)
 
 
-def _validate_with_llm(
-    llm,
+def _validate_with_agent(
     manifest: ChangeManifest,
     selected: list[TestSelection],
 ) -> list[GapDetail]:
-    """Use LLM to check coverage gaps."""
+    """Use the agent runner to check coverage gaps."""
     changes_data = [
         {
             "id": c.id,
@@ -157,37 +135,35 @@ def _validate_with_llm(
         for t in selected
     ]
 
+    threshold = config.MIN_RELEVANCE_SCORE
+
     prompt = (
+        f"You are a test coverage analyst for ODF (OpenShift Data Foundation) "
+        f"z-stream releases.\n\n"
         f"Analyze coverage for ODF z-stream {manifest.zstream_version}.\n\n"
+        f"Filter tests by score >= {threshold}, check each change has "
+        f"coverage, and identify gaps.\n\n"
         f"Changes requiring coverage:\n{json.dumps(changes_data, indent=2)}\n\n"
-        f"Selected tests ({len(selected)} total):\n{json.dumps(tests_data, indent=2)}"
+        f"Selected tests ({len(selected)} total):\n"
+        f"{json.dumps(tests_data, indent=2)}\n\n"
+        f"For each coverage gap, provide:\n"
+        f'- "change_id": the ID of the uncovered change\n'
+        f'- "component": the component of the uncovered change\n'
+        f'- "reason": why there is a gap\n\n'
+        f"Return a JSON object with:\n"
+        f'- "covered_change_ids": list of change IDs that have adequate '
+        f"  test coverage\n"
+        f'- "gaps": list of gap objects as described above\n\n'
+        f"Return ONLY the JSON object."
     )
 
-    response = llm.invoke([
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=prompt),
-    ])
+    raw = run_node_json(prompt, "coverage_validator")
 
-    return _parse_coverage_response(response.content, manifest)
+    if raw is None or not isinstance(raw, dict):
+        logger.warning("Agent returned no parseable coverage result")
+        return _validate_without_llm(manifest, selected)
 
-
-def _parse_coverage_response(content: str, manifest: ChangeManifest) -> list[GapDetail]:
-    """Parse the LLM coverage validation response."""
-    text = content.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
-
-    try:
-        result = json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse coverage LLM response")
-        return _validate_without_llm(manifest, [])
-
-    gaps_raw = result.get("gaps", [])
+    gaps_raw = raw.get("gaps", [])
     gaps = []
     for g in gaps_raw:
         try:
@@ -204,6 +180,10 @@ def _parse_coverage_response(content: str, manifest: ChangeManifest) -> list[Gap
     return gaps
 
 
+# ------------------------------------------------------------------
+# Deterministic fallback
+# ------------------------------------------------------------------
+
 def _validate_without_llm(
     manifest: ChangeManifest,
     selected: list[TestSelection],
@@ -215,7 +195,6 @@ def _validate_without_llm(
     for test in selected:
         path_lower = test.file_path.lower()
         reason_lower = test.reason.lower()
-        # Extract component hints from file paths
         for comp_keyword in [
             "ocs", "odf", "ceph", "rook", "noobaa", "mcg",
             "rgw", "pv", "csi", "ui", "console", "deploy", "upgrade",

@@ -1,8 +1,9 @@
-"""Root Cause node — performs root cause analysis on failures.
+"""Root Cause node -- performs root cause analysis on failures.
 
-Uses **Opus** to analyze each failure's error message, test source code,
-and related z-stream change to determine the root cause and classify it
-as product_bug, test_bug, or infra_issue.
+Uses **Opus** (routed automatically by run_node via node_name) to analyze
+each failure's error message, test source code, and related z-stream change
+to determine the root cause and classify it as product_bug, test_bug, or
+infra_issue.  Falls back to basic pattern-based classification.
 """
 from __future__ import annotations
 
@@ -10,10 +11,8 @@ import json
 import logging
 from datetime import datetime
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
+from core.agent_runner import run_node_json
 from core import config
-from core.llm import get_llm
 from core.models import (
     ChangeManifest,
     FailureAnalysis,
@@ -24,35 +23,6 @@ from core.models import (
 from core.state import AnalyzeState
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """\
-You are a senior QE engineer performing root cause analysis on test failures
-for ODF (OpenShift Data Foundation) z-stream releases.
-
-For each failed test, you are given:
-- The test name and ID
-- The error message / stack trace
-- The preliminary classification (product_bug, test_bug, or infra_issue)
-- The z-stream changes that might be related
-- The initial confidence score
-
-Analyze each failure and determine:
-1. The most likely root cause (detailed explanation)
-2. Whether the preliminary classification is correct — if not, provide the corrected type
-3. A confidence score (0.0-1.0) for your analysis
-4. Whether this is likely linked to a specific bug (provide bug ID if known)
-
-For each failure, output a JSON object with:
-- "test_id": the test identifier
-- "test_name": the test name
-- "failure_type": "product_bug", "test_bug", or "infra_issue"
-- "root_cause": detailed explanation of the root cause
-- "confidence": float 0.0-1.0
-- "linked_bug": bug ID string or null
-- "error_snippet": the most relevant part of the error message
-
-Output ONLY a JSON array of these objects, no other text.
-"""
 
 
 def root_cause(state: AnalyzeState) -> dict:
@@ -79,13 +49,6 @@ def root_cause(state: AnalyzeState) -> dict:
         logger.info("All classifications already have root causes above threshold")
         return {"classifications": []}
 
-    llm = get_llm("root_cause")  # Configured to use Opus
-    if llm is None:
-        logger.warning("No LLM available for root_cause analysis")
-        # Return classifications with basic root cause from error messages
-        updated = _basic_root_cause(needs_analysis)
-        return {"classifications": updated}
-
     try:
         # Build context about z-stream changes
         changes_context = _build_changes_context(manifest)
@@ -94,24 +57,48 @@ def root_cause(state: AnalyzeState) -> dict:
         failures_context = _build_failures_context(needs_analysis, junit_results)
 
         prompt = (
+            f"You are a senior QE engineer performing root cause analysis on "
+            f"test failures for ODF (OpenShift Data Foundation) z-stream "
+            f"releases.\n\n"
             f"Perform root cause analysis on these test failures.\n\n"
             f"Z-stream changes:\n{changes_context}\n\n"
-            f"Test failures requiring analysis:\n{failures_context}"
+            f"Test failures requiring analysis:\n{failures_context}\n\n"
+            f"Instructions:\n"
+            f"1. For each failure, read the test source code at the given "
+            f"   file path using the Read tool or grep to understand what "
+            f"   the test does.\n"
+            f"2. Analyze the error message / stack trace.\n"
+            f"3. Cross-reference with the z-stream changes.\n"
+            f"4. Determine:\n"
+            f"   - The most likely root cause (detailed explanation)\n"
+            f"   - Whether the classification is correct; if not, correct it\n"
+            f"   - A confidence score (0.0-1.0)\n"
+            f"   - Whether this is linked to a specific bug\n\n"
+            f"For each failure, output a JSON object with:\n"
+            f'- "test_id": the test identifier\n'
+            f'- "test_name": the test name\n'
+            f'- "failure_type": "product_bug", "test_bug", or "infra_issue"\n'
+            f'- "root_cause": detailed explanation of the root cause\n'
+            f'- "confidence": float 0.0-1.0\n'
+            f'- "linked_bug": bug ID string or null\n'
+            f'- "error_snippet": the most relevant part of the error message\n\n'
+            f"Return ONLY a JSON array of these objects."
         )
 
-        response = llm.invoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ])
+        raw = run_node_json(
+            prompt,
+            "root_cause",  # This is in OPUS_NODES, so Opus will be used
+            allowed_tools=["Read", "Bash(grep*)", "Bash(head*)"],
+            cwd=config.OCS_CI_REPO_PATH,
+        )
 
-        analyzed = _parse_rca_response(response.content)
-        if analyzed:
-            logger.info("Root cause analysis complete for %d failures", len(analyzed))
-            return {"classifications": analyzed}
+        if raw is not None:
+            analyzed = _parse_rca_results(raw)
+            if analyzed:
+                logger.info("Root cause analysis complete for %d failures", len(analyzed))
+                return {"classifications": analyzed}
 
-        # Fallback if parsing fails
-        logger.warning("Failed to parse RCA response, using basic analysis")
-        return {"classifications": _basic_root_cause(needs_analysis)}
+        logger.warning("Agent returned no usable RCA results, using basic analysis")
 
     except Exception as e:
         logger.error("Root cause analysis failed: %s", e)
@@ -127,6 +114,13 @@ def root_cause(state: AnalyzeState) -> dict:
             ],
         }
 
+    # Fallback
+    return {"classifications": _basic_root_cause(needs_analysis)}
+
+
+# ------------------------------------------------------------------
+# Context builders
+# ------------------------------------------------------------------
 
 def _build_changes_context(manifest: ChangeManifest | None) -> str:
     """Build a context string describing the z-stream changes."""
@@ -136,7 +130,8 @@ def _build_changes_context(manifest: ChangeManifest | None) -> str:
     lines = [f"Version: {manifest.zstream_version}"]
     for change in manifest.changes:
         lines.append(
-            f"- [{change.id}] {change.component} ({change.type.value}): {change.summary}"
+            f"- [{change.id}] {change.component} ({change.type.value}): "
+            f"{change.summary}"
         )
         if change.files_changed:
             lines.append(f"  Files: {', '.join(change.files_changed[:5])}")
@@ -148,7 +143,6 @@ def _build_failures_context(
     junit_results: JUnitResults | None,
 ) -> str:
     """Build a context string describing the test failures."""
-    # Build a lookup from test_id to full test result
     result_lookup: dict[str, dict] = {}
     if junit_results:
         for test in junit_results.test_details:
@@ -169,7 +163,6 @@ def _build_failures_context(
             "error_snippet": f.error_snippet or "",
         }
 
-        # Add full error message from junit results if available
         full_result = result_lookup.get(f.test_id, {})
         if full_result.get("error_message"):
             entry["full_error"] = full_result["error_message"][:2000]
@@ -180,47 +173,41 @@ def _build_failures_context(
     return json.dumps(entries, indent=2)
 
 
-def _parse_rca_response(content: str) -> list[FailureAnalysis]:
-    """Parse the LLM root cause analysis response."""
-    text = content.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
+# ------------------------------------------------------------------
+# Parsing helpers
+# ------------------------------------------------------------------
 
-    try:
-        raw_results = json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse RCA response as JSON")
-        return []
-
+def _parse_rca_results(raw: dict | list) -> list[FailureAnalysis]:
+    """Convert agent JSON output into FailureAnalysis objects."""
+    items = raw if isinstance(raw, list) else [raw]
     results = []
-    for raw in raw_results:
+    for item in items:
         try:
             results.append(
                 FailureAnalysis(
-                    test_id=raw.get("test_id", ""),
-                    test_name=raw.get("test_name", ""),
-                    failure_type=_safe_failure_type(raw.get("failure_type", "product_bug")),
-                    root_cause=raw.get("root_cause", "Unknown"),
-                    confidence=float(raw.get("confidence", 0.5)),
-                    linked_bug=raw.get("linked_bug"),
-                    error_snippet=raw.get("error_snippet"),
+                    test_id=item.get("test_id", ""),
+                    test_name=item.get("test_name", ""),
+                    failure_type=_safe_failure_type(item.get("failure_type", "product_bug")),
+                    root_cause=item.get("root_cause", "Unknown"),
+                    confidence=float(item.get("confidence", 0.5)),
+                    linked_bug=item.get("linked_bug"),
+                    error_snippet=item.get("error_snippet"),
                 )
             )
         except Exception as e:
             logger.warning("Failed to parse RCA result: %s", e)
-
     return results
 
 
+# ------------------------------------------------------------------
+# Deterministic fallback
+# ------------------------------------------------------------------
+
 def _basic_root_cause(failures: list[FailureAnalysis]) -> list[FailureAnalysis]:
-    """Provide basic root cause descriptions without LLM."""
+    """Provide basic root cause descriptions without agent."""
     results = []
     for f in failures:
-        root_cause_msg = "Unable to perform detailed analysis (LLM unavailable)."
+        root_cause_msg = "Unable to perform detailed analysis (agent unavailable)."
         if f.error_snippet:
             root_cause_msg = f"Error indicates: {f.error_snippet[:200]}"
 

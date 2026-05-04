@@ -1,7 +1,8 @@
-"""Merge Manifest node — combines Jira, errata, and git changes.
+"""Merge Manifest node -- combines Jira, errata, and git changes.
 
-Uses Sonnet to reconcile and deduplicate changes from all three sources,
-cross-referencing Jira tickets with git commits and errata advisories.
+Uses the unified agent runner to reconcile and deduplicate changes from all
+three sources, cross-referencing Jira tickets with git commits and errata
+advisories.  Falls back to deterministic dedup when the agent is unavailable.
 """
 from __future__ import annotations
 
@@ -9,46 +10,19 @@ import json
 import logging
 from datetime import datetime
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
-from core.llm import get_llm
+from core.agent_runner import run_node_json
 from core.models import (
     Change,
     ChangeManifest,
+    ChangeSource,
+    ChangeType,
     CoverageSummary,
+    Severity,
     StageError,
 )
 from core.state import InspectState
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """\
-You are a change reconciliation expert for ODF (OpenShift Data Foundation) z-stream releases.
-
-You are given changes from three sources:
-1. Jira issues (bug fixes, security fixes, enhancements)
-2. Errata advisories (official Red Hat advisories)
-3. Git diffs (file-level code changes)
-
-Your job is to reconcile and deduplicate these changes:
-- Match Jira issues to git commits using commit messages, linked tickets, or file paths.
-- Match errata bugs to Jira issues using bug IDs.
-- Merge duplicate entries, preferring Jira data for metadata and git data for file changes.
-- Preserve all unique changes even if they only appear in one source.
-
-For each deduplicated change, output a JSON object with:
-- id: the primary identifier (prefer Jira key, then errata ID, then git ID)
-- source: the primary source ("jira", "errata", or "git")
-- component: the ODF component
-- type: "bugfix", "security", or "enhancement"
-- severity: "critical", "major", "minor", or "low"
-- summary: concise description
-- files_changed: merged list of changed files from all sources
-- linked_errata: errata advisory ID if any
-- linked_commits: list of associated commit hashes
-
-Output ONLY a JSON array of the merged change objects, no other text.
-"""
 
 
 def merge_manifest(state: InspectState) -> dict:
@@ -82,9 +56,9 @@ def merge_manifest(state: InspectState) -> dict:
         logger.info("Only one source has changes, skipping dedup")
         merged = all_changes
     else:
-        merged = _merge_with_llm(jira_changes, errata_changes, git_changes, version)
+        merged = _merge_with_agent(jira_changes, errata_changes, git_changes, version)
         if not merged:
-            # Fallback: simple dedup if LLM fails
+            # Fallback: simple dedup if agent fails
             merged = _merge_without_llm(jira_changes, errata_changes, git_changes)
 
     # Build coverage summary
@@ -115,18 +89,17 @@ def merge_manifest(state: InspectState) -> dict:
     return {"change_manifest": manifest}
 
 
-def _merge_with_llm(
+# ------------------------------------------------------------------
+# Agent-powered merge
+# ------------------------------------------------------------------
+
+def _merge_with_agent(
     jira_changes: list[Change],
     errata_changes: list[Change],
     git_changes: list[Change],
     version: str,
 ) -> list[Change]:
-    """Use LLM to reconcile and deduplicate changes."""
-    llm = get_llm("merge_manifest")
-    if llm is None:
-        logger.warning("No LLM available for merge_manifest")
-        return []
-
+    """Use the agent runner to reconcile and deduplicate changes."""
     try:
         def changes_to_dicts(changes: list[Change]) -> list[dict]:
             return [c.model_dump(mode="json") for c in changes]
@@ -138,68 +111,56 @@ def _merge_with_llm(
         }
 
         prompt = (
-            f"Reconcile and deduplicate these changes for ODF z-stream "
-            f"version {version}:\n\n{json.dumps(input_data, indent=2)}"
+            f"You are a change reconciliation expert for ODF (OpenShift Data "
+            f"Foundation) z-stream releases.\n\n"
+            f"Merge, deduplicate, and cross-reference these changes from three "
+            f"sources into a unified manifest for version {version}.\n\n"
+            f"Rules:\n"
+            f"- Match Jira issues to git commits using commit messages, linked "
+            f"  tickets, or file paths.\n"
+            f"- Match errata bugs to Jira issues using bug IDs.\n"
+            f"- Merge duplicate entries, preferring Jira data for metadata and "
+            f"  git data for file changes.\n"
+            f"- Preserve all unique changes even if they only appear in one "
+            f"  source.\n\n"
+            f"Input data:\n{json.dumps(input_data, indent=2)}\n\n"
+            f"For each deduplicated change, output a JSON object with:\n"
+            f'- "id": primary identifier (prefer Jira key, then errata ID, '
+            f"  then git ID)\n"
+            f'- "source": primary source ("jira", "errata", or "git")\n'
+            f'- "component": the ODF component\n'
+            f'- "type": "bugfix", "security", or "enhancement"\n'
+            f'- "severity": "critical", "major", "minor", or "low"\n'
+            f'- "summary": concise description\n'
+            f'- "files_changed": merged list of changed files from all sources\n'
+            f'- "linked_errata": errata advisory ID if any\n'
+            f'- "linked_commits": list of associated commit hashes\n\n'
+            f"Return ONLY a JSON array of merged change objects."
         )
 
-        response = llm.invoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=prompt),
-        ])
+        raw = run_node_json(prompt, "merge_manifest")
 
-        return _parse_llm_response(response.content)
+        if raw is None:
+            logger.warning("Agent returned no parseable JSON for merge")
+            return []
+
+        return _parse_raw_changes(raw)
 
     except Exception as e:
-        logger.error("LLM merge failed: %s", e)
+        logger.error("Agent merge failed: %s", e)
         return []
 
 
-def _parse_llm_response(content: str) -> list[Change]:
-    """Parse the LLM JSON response into Change objects."""
-    text = content.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
-
-    try:
-        raw_changes = json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse merge LLM response as JSON")
-        return []
-
-    from core.models import ChangeSource, ChangeType, Severity
-
-    changes = []
-    for raw in raw_changes:
-        try:
-            changes.append(
-                Change(
-                    id=raw.get("id", "UNKNOWN"),
-                    source=_safe_enum(ChangeSource, raw.get("source", "jira"), ChangeSource.JIRA),
-                    component=raw.get("component", "unknown"),
-                    type=_safe_enum(ChangeType, raw.get("type", "bugfix"), ChangeType.BUGFIX),
-                    severity=_safe_enum(Severity, raw.get("severity", "minor"), Severity.MINOR),
-                    summary=raw.get("summary", ""),
-                    files_changed=raw.get("files_changed", []),
-                    linked_errata=raw.get("linked_errata"),
-                    linked_commits=raw.get("linked_commits", []),
-                )
-            )
-        except Exception as e:
-            logger.warning("Failed to parse merged change: %s", e)
-
-    return changes
-
+# ------------------------------------------------------------------
+# Deterministic fallback merge
+# ------------------------------------------------------------------
 
 def _merge_without_llm(
     jira_changes: list[Change],
     errata_changes: list[Change],
     git_changes: list[Change],
 ) -> list[Change]:
-    """Deterministic fallback merge when LLM is unavailable.
+    """Deterministic fallback merge when agent is unavailable.
 
     Strategy:
     - Start with Jira changes as the base.
@@ -217,16 +178,13 @@ def _merge_without_llm(
     for errata in errata_changes:
         matched = False
         for key, existing in merged.items():
-            # Match by linked errata or ID overlap
             if errata.linked_errata and existing.linked_errata == errata.linked_errata:
                 matched = True
                 break
-            # Check if errata ID contains a bug number that matches
             if errata.id.startswith("BZ-"):
                 bug_num = errata.id.replace("BZ-", "")
                 if bug_num in existing.id or bug_num in existing.summary:
                     matched = True
-                    # Merge errata link
                     if errata.linked_errata:
                         existing.linked_errata = errata.linked_errata
                     break
@@ -237,9 +195,7 @@ def _merge_without_llm(
     for git_change in git_changes:
         matched = False
         for key, existing in merged.items():
-            # Match by component
             if existing.component == git_change.component:
-                # Merge file changes and commits
                 all_files = list(set(existing.files_changed + git_change.files_changed))
                 all_commits = list(set(existing.linked_commits + git_change.linked_commits))
                 existing.files_changed = all_files
@@ -250,6 +206,34 @@ def _merge_without_llm(
             merged[git_change.id] = git_change.model_copy()
 
     return list(merged.values())
+
+
+# ------------------------------------------------------------------
+# Parsing helpers
+# ------------------------------------------------------------------
+
+def _parse_raw_changes(raw: dict | list) -> list[Change]:
+    """Convert agent JSON output into a list of Change objects."""
+    items = raw if isinstance(raw, list) else [raw]
+    changes = []
+    for item in items:
+        try:
+            changes.append(
+                Change(
+                    id=item.get("id", "UNKNOWN"),
+                    source=_safe_enum(ChangeSource, item.get("source", "jira"), ChangeSource.JIRA),
+                    component=item.get("component", "unknown"),
+                    type=_safe_enum(ChangeType, item.get("type", "bugfix"), ChangeType.BUGFIX),
+                    severity=_safe_enum(Severity, item.get("severity", "minor"), Severity.MINOR),
+                    summary=item.get("summary", ""),
+                    files_changed=item.get("files_changed", []),
+                    linked_errata=item.get("linked_errata"),
+                    linked_commits=item.get("linked_commits", []),
+                )
+            )
+        except Exception as e:
+            logger.warning("Failed to parse merged change: %s", e)
+    return changes
 
 
 def _safe_enum(enum_cls, value: str, default):

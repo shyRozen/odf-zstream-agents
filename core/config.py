@@ -56,8 +56,9 @@ SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL", "")
 
 OCS_CI_REPO_PATH = os.getenv("OCS_CI_REPO_PATH", str(Path.home() / "codcod/new-ocs-ci/ocs-ci"))
 
-DEFAULT_MODEL = get("llm.default_model", "claude-sonnet-4-6")
-OPUS_MODEL = get("llm.opus_model", "claude-opus-4-7")
+LLM_RUNTIME = get("llm.runtime", "claude-code")
+DEFAULT_MODEL = get("llm.default_model", "sonnet")
+OPUS_MODEL = get("llm.opus_model", "opus")
 OPUS_NODES = get("llm.opus_nodes", ["mark_matcher", "root_cause"])
 NO_LLM_NODES = get("llm.no_llm_nodes", ["git_diff", "jenkins_agent", "classifier", "notifier"])
 LLM_TEMPERATURE = get("llm.temperature", 0.1)

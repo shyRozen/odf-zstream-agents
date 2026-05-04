@@ -30,8 +30,9 @@ analysis:
   root_cause_confidence_threshold: 0.7
 
 llm:
-  default_model: claude-sonnet-4-6
-  opus_model: claude-opus-4-7
+  runtime: claude-code          # "claude-code" or "litellm"
+  default_model: sonnet         # claude-code: sonnet/opus/haiku. litellm: claude-sonnet-4-6, gpt-4o, etc.
+  opus_model: opus
   opus_nodes:
     - mark_matcher
     - root_cause
@@ -42,6 +43,13 @@ llm:
     - notifier
   temperature: 0.1
   max_tokens: 4096
+  claude_code:
+    max_turns: 10
+    default_timeout: 120
+    opus_timeout: 300
+    allowed_tools_default: []
+    allowed_tools_with_files: ["Read", "Bash(find*)", "Bash(grep*)", "Bash(cat*)"]
+    allowed_tools_with_web: ["Read", "Bash(curl*)", "WebSearch", "WebFetch"]
 
 squad_mapping:
   ceph-csi: {squad: green_squad, paths: ["tests/functional/pv/", "tests/functional/storageclass/"]}
