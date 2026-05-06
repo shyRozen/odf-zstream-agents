@@ -46,17 +46,26 @@ def mark_matcher(state: MapState) -> dict:
     if manifest:
         for change in manifest.changes:
             changed_components.add(change.component.lower())
-            # Keywords from summary
-            for word in change.summary.lower().split():
+            # Keywords from summary — strip brackets, punctuation
+            import re
+
+            clean_summary = re.sub(r"[\[\](){}:,\"']", " ", change.summary.lower())
+            for word in clean_summary.split():
                 if len(word) > 3 and word.isalpha():
                     change_keywords.add(word)
-            # Files changed in PRs
+            # Files changed in PRs + AI-extracted keywords
             for f in change.files_changed:
+                if f.startswith("__keyword__"):
+                    # AI-extracted keyword from PR analyzer
+                    kw = f.replace("__keyword__", "").lower()
+                    if len(kw) > 2:
+                        change_keywords.add(kw)
+                    continue
                 pr_changed_files.add(f.lower())
-                # Also extract filename without path
-                basename = f.split("/")[-1].replace(".py", "").replace(".go", "")
-                if len(basename) > 3:
-                    change_keywords.add(basename.lower())
+                for segment in f.replace("/", " ").replace("-", " ").replace("_", " ").split():
+                    word = segment.split(".")[0].lower()
+                    if len(word) > 2 and word.isalpha():
+                        change_keywords.add(word)
 
     # Reverse mapping: dir -> component
     dir_to_component: dict[str, str] = {}
