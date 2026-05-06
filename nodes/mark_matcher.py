@@ -128,8 +128,16 @@ def mark_matcher(state: MapState) -> dict:
                 )
             )
 
-    # Sort by score descending, cap at MAX_TESTS
+    # Sort by score descending
     results.sort(key=lambda t: -t.relevance_score)
+
+    # Dynamic threshold: drop tests scoring < 70% of the top score
+    if results:
+        top_score = results[0].relevance_score
+        dynamic_cutoff = max(top_score * 0.7, config.MIN_RELEVANCE_SCORE)
+        results = [t for t in results if t.relevance_score >= dynamic_cutoff]
+
+    # Cap at MAX_TESTS
     if len(results) > config.MAX_TESTS:
         results = results[: config.MAX_TESTS]
 
@@ -152,49 +160,59 @@ def _score_test_function(
     change_keywords: set[str],
     pr_changed_files: set[str],
 ) -> float:
-    """Score a single test function's relevance to the z-stream changes."""
-    score = 0.3  # base for being in a search area
+    """Score a single test function's relevance to the z-stream changes.
 
-    # 1. Component match (strongest signal)
-    if component and component.lower() in changed_components:
-        score = 0.7
+    Scoring tiers:
+      0.90-1.00  PR file match — test references a file changed in the PR
+      0.80-0.89  Strong keyword match — 3+ keywords from bug overlap with test
+      0.70-0.79  Good keyword match — 2 keywords overlap + component match
+      0.50-0.69  Component match only — right area but no specific keyword link
+      0.30-0.49  Weak — in search area but no real connection
+    """
+    score = 0.0
+    reasons = []
 
-    # 2. Path-based match
-    path_lower = file_path.lower()
-    if any(c in path_lower for c in changed_components):
-        score = max(score, 0.65)
-
-    # 3. Keyword overlap between change summaries and test
     func_name = func.get("name", "").lower()
     func_doc = func.get("docstring", "").lower()
-    func_text = f"{func_name} {func_doc}"
 
-    # Extract test keywords
+    # Extract test-specific keywords from function name
     test_words = set()
     for word in func_name.replace("test_", "").split("_"):
         if len(word) > 2:
             test_words.add(word)
     test_words.update(file_keywords)
 
-    keyword_hits = len(change_keywords & test_words)
-    if keyword_hits >= 3:
-        score = max(score, 0.85)
-    elif keyword_hits >= 2:
-        score = max(score, 0.75)
-    elif keyword_hits >= 1:
-        score = min(score + 0.1, 1.0)
-
-    # 4. PR file path matching (most precise)
+    # 1. PR file path matching — most precise signal
     if pr_changed_files:
+        func_text = f"{func_name} {func_doc} {' '.join(file_keywords)}"
         for pr_file in pr_changed_files:
             pr_basename = pr_file.split("/")[-1].replace(".go", "").replace(".py", "")
-            if pr_basename in func_text or pr_basename in " ".join(file_keywords):
-                score = max(score, 0.9)
+            if len(pr_basename) > 3 and pr_basename in func_text:
+                score = max(score, 0.95)
+                reasons.append(f"PR file match: {pr_basename}")
                 break
 
-    # 5. Tier boost
+    # 2. Keyword overlap — how much the bug description matches the test
+    keyword_hits = len(change_keywords & test_words)
+    if keyword_hits >= 4:
+        score = max(score, 0.90)
+    elif keyword_hits >= 3:
+        score = max(score, 0.80)
+    elif keyword_hits >= 2:
+        score = max(score, 0.70)
+    elif keyword_hits == 1:
+        score = max(score, 0.55)
+
+    # 3. Component match — necessary but not sufficient
+    if component and component.lower() in changed_components:
+        score = max(score, 0.50)
+    path_lower = file_path.lower()
+    if any(c in path_lower for c in changed_components):
+        score = max(score, 0.45)
+
+    # 4. Tier1 boost (small — shouldn't push irrelevant tests over threshold)
     if "tier1" in file_tiers:
-        score = min(score + 0.05, 1.0)
+        score = min(score + 0.03, 1.0)
 
     return min(score, 1.0)
 
