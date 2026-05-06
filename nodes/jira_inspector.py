@@ -142,6 +142,7 @@ JIRA_COMPONENT_MAP = {
     "odf-cli": "odf-cli",
     "documentation": "unknown",
     "must-gather": "must-gather",
+    "ocs-must-gather": "must-gather",
 }
 
 

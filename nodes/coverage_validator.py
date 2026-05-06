@@ -239,7 +239,7 @@ def _validate_without_llm(
         "odf-cli": ["odf-cli", "cli", "odf_cli"],
         "nfs": ["nfs"],
         "lvmo": ["lvmo", "lvm"],
-        "must-gather": ["must", "gather"],
+        "must-gather": ["must_gather", "must-gather", "mustgather", "gather"],
         "deployment": ["deploy", "upgrade", "install"],
     }
 
