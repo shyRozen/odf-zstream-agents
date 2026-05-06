@@ -138,7 +138,7 @@ class PipelineState(TypedDict):
 
 **Pattern**: Fan-out → Fan-in
 
-Three agent nodes query independent data sources in parallel, then a merge node combines their outputs into a unified Change Manifest.
+Three agent nodes query independent data sources in parallel, then a merge node combines their outputs into a unified Change Manifest. Jira Inspector also fetches remote links from each bug to extract GitHub PR URLs, which feed into the PR Analyzer.
 
 ```
          ┌──────────────┐
@@ -149,8 +149,8 @@ Three agent nodes query independent data sources in parallel, then a merge node 
        ┌────────┼────────┐
        ▼        ▼        ▼
   ┌─────────┐┌────────┐┌─────────┐
-  │Jira     ││Errata  ││Git Diff │    ← All 3 run in parallel
-  │Inspector││Parser  ││Analyzer │
+  │Jira     ││Errata  ││PR       │    ← All 3 run in parallel
+  │Inspector││(disabled)│Analyzer │
   └────┬────┘└───┬────┘└────┬────┘
        └─────────┼──────────┘
                  ▼
@@ -162,9 +162,9 @@ Three agent nodes query independent data sources in parallel, then a merge node 
 
 | Node | LLM? | Tools | Input | Output |
 |------|------|-------|-------|--------|
-| Jira Inspector | Yes (extraction) | `jira_search`, `jira_get_issue` | z-stream version | Ticket list with metadata |
-| Errata Parser | Yes (parsing) | `errata_fetch`, `errata_parse` | z-stream version or errata ID | Advisory-to-component mapping |
-| Git Diff Analyzer | No (deterministic) | `git_diff`, `git_log` | Version tags | Changed files and components |
+| Jira Inspector | Yes (extraction) | `jira_search`, `jira_get_issue` | z-stream version | Ticket list with metadata + PR URLs (from remote links) |
+| Errata Parser | Disabled | `errata_fetch`, `errata_parse` | — | Returns empty (insufficient API access) |
+| PR Analyzer | No (deterministic) | GitHub API | PR URLs from Jira | Changed files per PR |
 | Merge & Cross-Ref | Yes (reconciliation) | None | All 3 outputs | Unified Change Manifest |
 
 **Why a manager sub-graph?** The fan-out/fan-in pattern has error handling logic — if Jira is down, proceed with errata + git only (graceful degradation). The manager handles this conditional logic.
@@ -198,12 +198,14 @@ Three agent nodes query independent data sources in parallel, then a merge node 
 
 | Node | LLM? | Tools | Input | Output |
 |------|------|-------|-------|--------|
-| Code Analyzer | Yes | `ocs_ci_list_tests`, `ocs_ci_read_marks`, `squad_map_lookup` | Change Manifest | Component → test directory mapping |
-| Mark Matcher | Yes (scoring) | `read_test_file`, `parse_marks` | Mapped test dirs | Scored test list with relevance rationale |
+| Code Analyzer | Yes | `ocs_ci_list_tests`, `ocs_ci_read_marks`, `squad_map_lookup` | Change Manifest | Component → test function mapping (using pre-built test index) |
+| Mark Matcher | No (heuristic) | `read_test_file`, `parse_marks` | Mapped test functions | Scored test list (PR file match = 0.95, component = 0.70, keyword overlap boosts) |
 | Coverage Validator | Yes (gap analysis) | None | Scored tests + manifest | Final test list + coverage gaps |
 | Widen Search | No (deterministic) | None | Gap list | Expanded search areas for Code Analyzer |
 
-**Key LLM decision**: Mark Matcher uses the LLM to understand *why* a test is relevant to a specific bug fix — not just keyword matching. This is where AI adds real value vs. a regex.
+**Per-testcase selection**: The pipeline selects individual test functions (e.g. `test_failover.py::TestFailover::test_failover`) rather than directories. Uses a pre-built test index (532 files, 1058 tests) from the `ocs-ci-codebase-map` repo, downloaded at pipeline startup.
+
+**Scoring tiers**: PR file path match = 0.95, component match alone = 0.70, keyword overlap needed for higher scores. Dynamic threshold cuts tests below 70% of the top score. Force-include guarantees at least one test per changed component.
 
 **Retry policy**: Max 2 retry loops. If coverage is still < 80% after retries, flag for human review and proceed.
 
@@ -312,11 +314,11 @@ Not every node needs an LLM. Not every LLM call needs the most expensive model. 
 | Node | Model | allowed_tools (claude-code mode) | Why |
 |------|-------|----------------------------------|-----|
 | Jira Inspector | Sonnet | `allowed_tools_with_web` | Extraction from structured API data — fast, cheap |
-| Errata Parser | Sonnet | `allowed_tools_with_web` | Same — parsing structured advisories |
-| Git Diff Analyzer | **None** | N/A | Deterministic git commands, no LLM needed |
+| Errata Parser | Disabled | N/A | Returns empty (insufficient API access) |
+| PR Analyzer | **None** | N/A | Fetches PR changed files from GitHub API |
 | Merge & Cross-Ref | Sonnet | `allowed_tools_default` | Reconcile 3 data sources, flag conflicts |
 | Code Analyzer | Sonnet | `allowed_tools_with_files` | Map components to test dirs using known mapping table |
-| Mark Matcher | **Opus** | `allowed_tools_with_files` | Needs deep understanding of test code vs. bug description to score relevance |
+| Mark Matcher | **None** | N/A | Heuristic scoring: PR file match (0.95), component match (0.70), keyword overlap |
 | Coverage Validator | Sonnet | `allowed_tools_default` | Gap analysis against manifest — structured comparison |
 | PR Builder | Sonnet | `allowed_tools_default` | Generate PR description — templated |
 | Jenkins Agent | **None** | N/A | Pure API calls — no LLM |
@@ -378,8 +380,8 @@ odf-zstream-agents/
 │
 ├── nodes/
 │   ├── jira_inspector.py        # Inspect: query Jira Cloud
-│   ├── errata_parser.py         # Inspect: parse errata
-│   ├── git_diff.py              # Inspect: git diff between tags
+│   ├── errata_parser.py         # Inspect: parse errata (disabled)
+│   ├── git_diff.py              # Inspect: PR Analyzer — fetches PR changed files from GitHub
 │   ├── merge_manifest.py        # Inspect: merge & cross-ref
 │   ├── code_analyzer.py         # Map: component → test dirs
 │   ├── mark_matcher.py          # Map: score test relevance
@@ -427,15 +429,16 @@ $ zstream run 4.16.2
 [Pipeline] Previous version: 4.16.1
 
 [Stage 1/6] Inspect Manager
-  ├── Jira Inspector (Sonnet)     → 12 bugs (3 critical, 5 major, 4 minor)
-  ├── Errata Parser (Sonnet)      → 2 CVEs + 10 bugfixes
-  ├── Git Diff Analyzer (no LLM)  → 47 commits, 128 files
+  ├── Jira Inspector (Sonnet)     → 12 bugs, 8 with GitHub PRs (via remote links)
+  ├── Errata Parser               → (disabled)
+  ├── PR Analyzer (no LLM)        → 8 PRs, 47 changed files
   └── Merge & Cross-Ref (Sonnet)  → 14 unique changes in manifest
   ⏱ 1m 48s
 
 [Stage 2/6] Map Tests Manager
-  ├── Code Analyzer (Sonnet)      → green_squad (PV/SC), red_squad (MCG)
-  ├── Mark Matcher (Opus)         → 83 scanned, 34 selected (score > 0.7)
+  ├── Code Analyzer (Sonnet)      → ceph-csi (PV/SC), mcg, monitoring
+  ├── Mark Matcher (heuristic)    → 1058 indexed, 34 selected (score > 0.70)
+  │   Top: test_failover.py::TestFailover::test_failover (0.95)
   ├── Coverage Validator (Sonnet) → 13/14 covered, 1 gap
   └── Retry: widened search       → 14/14 covered
   ⏱ 3m 12s
@@ -579,7 +582,7 @@ pipeline:
 
 test_selection:
   min_relevance_score: 0.7
-  max_tests: 100
+  max_tests: 50
   include_tiers: [tier1, tier2]
   always_include_marks: [acceptance]
   coverage_threshold: 0.8        # retry if below this

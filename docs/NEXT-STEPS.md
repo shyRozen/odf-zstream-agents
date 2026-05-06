@@ -36,42 +36,52 @@ python -c "from tools.jenkins_tools import jenkins_get_build_status; print(jenki
 
 ## Step 2: First Real Z-Stream Run
 
-**Priority**: High
-**Why**: Validates the entire pipeline with real data. Exposes integration issues that mocks can't catch.
+**Priority**: High -- **Status**: Working with `--collect-only`
+**Why**: Validates inspect + map stages with real data.
 
-**How**:
-1. Pick a recent z-stream that has already been validated manually (so you have ground truth to compare)
-2. Run: `zstream run <version>`
-3. Compare the Change Manifest against what humans found
-4. Compare test selection against what humans ran
-5. Compare analysis output against known results
+The `--collect-only` flag runs inspect + map only, showing selected tests with scores. Example:
 
-**Expected issues**:
-- Jira query may need JQL tuning (field names, project key, status values)
-- Errata API endpoint may need adjustment for Red Hat internal access
-- ocs-ci repo path may differ if not at `~/codcod/new-ocs-ci/ocs-ci/`
-- Mark Matcher relevance scoring needs prompt tuning after seeing real test/change data
+```
+$ zstream run 4.18.1 --collect-only
 
-**Outcome**: A calibration baseline — what the AI picks vs. what humans would pick. Target: >70% overlap on first run.
+[Stage 1/6] Inspect Manager
+  ├── Jira Inspector       → 8 bugs, 5 with GitHub PRs
+  ├── PR Analyzer          → 5 PRs, 23 changed files
+  └── Merge & Cross-Ref    → 8 unique changes
+
+[Stage 2/6] Map Tests Manager (collect-only)
+  Selected 22 tests (max 50):
+    0.95  test_pvc_creation.py::TestPVCCreation::test_create_pvc_and_verify
+    0.95  test_failover.py::TestFailover::test_failover
+    0.70  test_mcg_bucket.py::TestMCGBucket::test_bucket_creation
+    ...
+```
+
+**Remaining issues**:
+- Errata parser disabled (insufficient API access) -- pipeline proceeds with Jira + PR data only
+- Mark Matcher scoring may need threshold tuning after more runs
+- Full pipeline (PR Builder + Jenkins) not yet tested end-to-end
 
 ---
 
-## Step 3: Prompt Tuning
+## Step 3: Scoring & Selection Tuning
 
 **Priority**: High
-**Why**: LLM nodes ship with generic prompts. Real data reveals what the model misunderstands about your domain.
+**Why**: Test selection is now heuristic-based (not LLM prompts). Tuning means adjusting scoring weights and thresholds.
 
-With the claude-code runtime, tuning means adjusting the **prompt strings** passed to `run_node()` in each node's Python file. There are no separate system messages — the prompt _is_ the full instruction to the Claude Code agent.
+Mark Matcher is now deterministic -- no LLM, no prompt tuning. Scoring tiers:
 
-**Nodes to tune** (in priority order):
+| Signal | Score |
+|--------|-------|
+| PR file path match | 0.95 |
+| Component match + keyword overlap | 0.70 - 0.90 |
+| Component match alone | 0.70 |
 
-### 3a. Mark Matcher (Opus)
-The highest-value node — decides which tests run. The prompt in `nodes/mark_matcher.py` needs:
-- Examples of what "relevant" means for your team (a ceph-csi fix should trigger PV tests, not MCG tests)
-- The scoring rubric (what makes a test score 0.9 vs 0.5?)
-- Edge cases (upgrade tests? performance tests? UI tests for backend fixes?)
-
-**How**: Run the pipeline, look at `scored_tests`, identify false positives/negatives, add few-shot examples to the prompt string in `nodes/mark_matcher.py`.
+**What to tune**:
+- **JIRA_COMPONENT_MAP** in config: maps DFBUGS component names to ocs-ci component keys (e.g. "Multi-Cloud Object Gateway" to "mcg")
+- **Dynamic threshold**: currently 70% of top score. Adjust if too many/few tests selected
+- **`--max-tests`**: default 50, override from CLI
+- **Force-include**: guarantees at least one test per changed component
 
 ### 3b. Root Cause Analyzer (Opus)
 Classifies failures as product_bug / test_bug / infra_issue. The prompt in `nodes/root_cause.py` needs:
@@ -82,10 +92,9 @@ Classifies failures as product_bug / test_bug / infra_issue. The prompt in `node
 **How**: Feed it 5-10 real failures from past Jenkins runs, check if classifications match human judgment.
 
 ### 3c. Merge & Cross-Ref (Sonnet)
-Reconciles Jira + errata + git into one manifest. Needs:
+Reconciles Jira + PR data into one manifest. Needs:
 - Your Jira field names and conventions
-- How errata advisory IDs relate to Jira ticket IDs in your workflow
-- Component naming conventions (ceph-csi vs cephcsi vs CSI)
+- Component naming conventions (JIRA_COMPONENT_MAP handles most of this now)
 
 > **LiteLLM note**: To switch to LiteLLM for cost control or to use different providers (GPT-4o, Ollama local models), set `llm.runtime: litellm` in `config.yaml` and provide the relevant API key. Model names change to full identifiers (e.g., `claude-sonnet-4-6`, `gpt-4o`).
 

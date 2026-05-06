@@ -14,14 +14,14 @@
 ```
 Pipeline Orchestrator (top-level StateGraph)
 ├── Inspect Manager (sub-graph: fan-out/fan-in)
-│   ├── Jira Inspector       → Sonnet, queries Jira Cloud API
-│   ├── Errata Parser        → Sonnet, parses Red Hat advisories
-│   ├── Git Diff Analyzer    → No LLM, deterministic git diff
+│   ├── Jira Inspector       → Sonnet, queries Jira Cloud API + fetches PR URLs from remote links
+│   ├── Errata Parser        → (disabled — insufficient API access)
+│   ├── PR Analyzer          → No LLM, fetches PR changed files from GitHub API
 │   └── Merge & Cross-Ref    → Sonnet, deduplicates and reconciles
 │
 ├── Map Tests Manager (sub-graph: sequential + retry loop)
-│   ├── Code Analyzer        → Sonnet, component → squad → test dirs
-│   ├── Mark Matcher         → Opus, deep relevance scoring
+│   ├── Code Analyzer        → Sonnet, component → squad → test functions (per-testcase)
+│   ├── Mark Matcher         → No LLM, heuristic scoring (PR files, components, keywords)
 │   └── Coverage Validator   → Sonnet, gap analysis
 │
 ├── PR Builder (single node) → Sonnet, branch + marks + PR
@@ -40,14 +40,15 @@ Pipeline Orchestrator (top-level StateGraph)
 
 | Metric | Value |
 |--------|-------|
-| Total source files | 36 |
-| Lines of code | ~5,955 |
+| Total source files | 37 |
+| Lines of code | ~6,200 |
 | LangGraph sub-graphs | 3 (inspect, map, analyze) |
 | Agent nodes | 14 |
-| Tool functions | 23 across 8 modules |
-| Nodes using Opus | 2 (mark_matcher, root_cause) |
+| Tool functions | 23 across 9 modules |
+| Test index | 532 files, 1058 test functions (from ocs-ci-codebase-map repo) |
+| Nodes using Opus | 1 (root_cause) |
 | Nodes using Sonnet | 7 |
-| Nodes using no LLM | 5 (git_diff, jenkins, classifier, notifier, merge fallback) |
+| Nodes using no LLM | 6 (pr_analyzer, jenkins, classifier, notifier, mark_matcher, merge fallback) |
 
 ### Project Location
 
@@ -94,10 +95,25 @@ In claude-code mode, LLM nodes no longer call tool functions directly. Instead, 
 | `errata_tools.py` | `errata_fetch`, `errata_parse` | Red Hat errata API |
 | `git_tools.py` | `git_diff_files`, `git_log_between`, `git_show_commit` | Local git via subprocess |
 | `ocs_ci_tools.py` | `list_tests`, `read_test_marks`, `squad_map_lookup`, `read_test_source` | Local ocs-ci repo (AST parsing) |
+| `ocs_ci_scanner.py` | `scan_tests`, `build_test_index` | Builds test index (532 files, 1058 tests) for per-testcase selection |
 | `github_tools.py` | `github_create_branch`, `github_add_mark_to_test`, `github_create_pr`, `github_comment_pr` | GitHub API via PyGithub |
 | `jenkins_tools.py` | `jenkins_trigger_build`, `jenkins_get_build_status`, `jenkins_get_test_report`, `jenkins_get_console_log` | Jenkins REST API |
 | `slack_tools.py` | `slack_post_message` | Slack webhook |
 | `db_tools.py` | `save_pipeline_results`, `query_historical_results` | PostgreSQL via psycopg2 |
+
+### Per-Testcase Selection
+
+The pipeline selects individual test functions (e.g. `test_failover.py::TestFailover::test_failover`) instead of directories. Uses a pre-built test index (532 files, 1058 tests) stored in the `ocs-ci-codebase-map` repo (`test-index.json`), downloaded at pipeline startup. The index is built by `tools/ocs_ci_scanner.py`.
+
+### PR-Driven Test Selection
+
+Jira Inspector fetches remote links from each DFBUGS issue to extract GitHub PR URLs. The PR Analyzer node fetches actual changed files from each PR via GitHub API. Test scoring uses PR file paths as the strongest relevance signal (0.95). Component match alone scores 0.70; keyword overlap is needed for higher scores. A dynamic threshold cuts tests below 70% of the top score. Force-include guarantees at least one test per changed component.
+
+JIRA_COMPONENT_MAP normalizes DFBUGS component names (e.g. "Multi-Cloud Object Gateway" to "mcg", "ceph-monitoring" to "monitoring", "odf-cli" to "odf-cli").
+
+### Errata Disabled
+
+The errata parser returns empty due to insufficient API access. The pipeline proceeds with Jira + PR data only.
 
 ### Bugs Fixed During Build
 
@@ -124,6 +140,12 @@ claude --version
 
 # End-to-end run (degrades gracefully without API keys)
 zstream run 4.16.2
+
+# Collect-only (inspect + map, show selected tests with scores)
+zstream run 4.16.2 --collect-only
+
+# Override max tests (default 50)
+zstream run 4.16.2 --max-tests 30
 
 # Dry run (shows initial state)
 zstream run 4.16.2 --dry-run

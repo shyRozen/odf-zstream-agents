@@ -1,22 +1,24 @@
 # ODF Z-Stream Multi-Agent Test Automation
 
-AI-powered pipeline that automates the z-stream test lifecycle for **OpenShift Data Foundation (ODF)**. Inspects what went into a z-stream release, selects relevant tests from the ocs-ci framework, creates a PR with temporary marks, triggers Jenkins runs, and analyzes results.
+AI-powered pipeline that automates the z-stream test lifecycle for **OpenShift Data Foundation (ODF)**. Inspects what went into a z-stream release (Jira bugs + GitHub PRs), selects individual test functions from the ocs-ci framework using a pre-built test index, creates a PR with temporary marks, triggers Jenkins runs, and analyzes results.
 
 ## Architecture
 
 Hierarchical **LangGraph** pipeline — no CrewAI, no NATS, no swarm. Single framework, single mental model. LLM nodes run via **Claude Code CLI** (`claude --print`) by default, with **LiteLLM** as a fallback runtime for alternative providers.
 
+The pipeline is **PR-driven**: Jira Inspector fetches remote links from each bug to find GitHub PR URLs, then the PR Analyzer fetches changed files from each PR via GitHub API. Test selection scores individual test functions (not directories) against PR file paths as the strongest relevance signal.
+
 ```
 Pipeline Orchestrator (top-level StateGraph)
 ├── Inspect Manager (sub-graph: fan-out/fan-in)
-│   ├── Jira Inspector         Sonnet    Queries Jira Cloud API
-│   ├── Errata Parser          Sonnet    Parses Red Hat advisories
-│   ├── Git Diff Analyzer      No LLM    Deterministic git diff
+│   ├── Jira Inspector         Sonnet    Queries Jira + fetches PR URLs from remote links
+│   ├── Errata Parser          (disabled — insufficient API access)
+│   ├── PR Analyzer            No LLM    Fetches changed files from GitHub PRs
 │   └── Merge & Cross-Ref      Sonnet    Deduplicates and reconciles
 │
 ├── Map Tests Manager (sub-graph: sequential + retry)
-│   ├── Code Analyzer          Sonnet    Component → squad → test dirs
-│   ├── Mark Matcher           Opus      Deep relevance scoring
+│   ├── Code Analyzer          Sonnet    Component → squad → test functions
+│   ├── Mark Matcher           No LLM    Heuristic scoring (PR files, components, keywords)
 │   └── Coverage Validator     Sonnet    Gap analysis
 │
 ├── PR Builder (single node)   Sonnet    Branch + marks + PR
@@ -56,6 +58,12 @@ cp .env.example .env
 # Full pipeline
 zstream run 4.16.2
 
+# Collect-only (inspect + map, show selected tests with scores, don't execute)
+zstream run 4.16.2 --collect-only
+
+# Override max tests (default 50)
+zstream run 4.16.2 --max-tests 30
+
 # Dry run (show initial state, don't execute)
 zstream run 4.16.2 --dry-run
 ```
@@ -70,8 +78,8 @@ docker compose up -d
 
 | Stage | Pattern | Nodes | What it Does |
 |-------|---------|-------|-------------|
-| **1. Inspect** | Fan-out → Fan-in | 4 | Query Jira, errata, git in parallel → merge into Change Manifest |
-| **2. Map Tests** | Sequential + retry | 3 | Map changes to ocs-ci tests, score relevance, validate coverage |
+| **1. Inspect** | Fan-out → Fan-in | 4 | Query Jira (+ PR URLs from remote links), fetch PR changed files from GitHub, merge into Change Manifest. Errata disabled |
+| **2. Map Tests** | Sequential + retry | 3 | Map changes to individual test functions (from pre-built index of 532 files / 1058 tests), score relevance using PR file paths + components + keywords, validate coverage |
 | **3. PR Builder** | Single node | 1 | Create branch, add `@pytest.mark.zstream_{ver}` to tests, open PR |
 | **4. Jenkins** | Single node + poll | 1 | Trigger `qe-deploy-ocs-cluster-prod`, poll until complete, fetch results |
 | **5. Analyze** | DAG | 4 | Classify pass/fail, root cause failures, detect regressions, generate report |
@@ -83,15 +91,16 @@ docker compose up -d
 $ zstream run 4.16.2
 
 [Stage 1/6] Inspect Manager
-  ├── Jira Inspector       → 12 bugs (3 critical, 5 major, 4 minor)
-  ├── Errata Parser        → 2 CVEs + 10 bugfixes
-  ├── Git Diff Analyzer    → 47 commits, 128 files
+  ├── Jira Inspector       → 12 bugs, 8 with GitHub PRs (via remote links)
+  ├── Errata Parser        → (disabled)
+  ├── PR Analyzer          → 8 PRs, 47 changed files
   └── Merge & Cross-Ref    → 14 unique changes
   ⏱ 1m 48s
 
 [Stage 2/6] Map Tests Manager
-  ├── Code Analyzer        → green_squad (PV/SC), red_squad (MCG)
-  ├── Mark Matcher         → 83 scanned, 34 selected (score > 0.7)
+  ├── Code Analyzer        → ceph-csi (PV/SC), mcg, monitoring
+  ├── Mark Matcher         → 1058 indexed, 34 selected (score > 0.70)
+  │   Top: test_failover.py::TestFailover::test_failover (0.95)
   └── Coverage Validator   → 14/14 covered
   ⏱ 3m 12s
 
@@ -135,8 +144,8 @@ odf-zstream-agents/
 │
 ├── nodes/                       # 14 agent node implementations
 │   ├── jira_inspector.py        # Inspect: query Jira
-│   ├── errata_parser.py         # Inspect: parse errata
-│   ├── git_diff.py              # Inspect: git diff (no LLM)
+│   ├── errata_parser.py         # Inspect: parse errata (disabled)
+│   ├── git_diff.py              # Inspect: PR Analyzer — fetches PR changed files from GitHub
 │   ├── merge_manifest.py        # Inspect: merge sources
 │   ├── code_analyzer.py         # Map: component → test dirs
 │   ├── mark_matcher.py          # Map: score test relevance (Opus)
@@ -154,6 +163,7 @@ odf-zstream-agents/
 │   ├── errata_tools.py          # errata_fetch, errata_parse
 │   ├── git_tools.py             # git_diff_files, git_log_between, git_show_commit
 │   ├── ocs_ci_tools.py          # list_tests, read_test_marks, squad_map_lookup, read_test_source
+│   ├── ocs_ci_scanner.py        # Builds test index (532 files, 1058 tests) for per-testcase selection
 │   ├── github_tools.py          # github_create_branch, github_add_mark_to_test, github_create_pr, ...
 │   ├── jenkins_tools.py         # jenkins_trigger_build, jenkins_get_build_status, ...
 │   ├── slack_tools.py           # slack_post_message
@@ -176,7 +186,7 @@ pipeline:
 
 test_selection:
   min_relevance_score: 0.7    # Tests below this score are filtered out
-  max_tests: 100              # Cap on selected tests
+  max_tests: 50               # Cap on selected tests (override with --max-tests)
   coverage_threshold: 0.8     # Retry if coverage below this
 
 jenkins:
