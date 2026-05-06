@@ -62,9 +62,20 @@ def run(
         help="Run inspect + map stages only — show selected tests without "
         "creating a PR or triggering Jenkins",
     ),
+    max_tests: int = typer.Option(
+        0,
+        "--max-tests",
+        help="Override maximum number of tests to select (0 = use config default)",
+    ),
 ) -> None:
     """Run the z-stream pipeline for a given ODF version."""
     zstream, previous = _parse_version(version)
+
+    # Override MAX_TESTS if provided
+    if max_tests > 0:
+        from core import config as cfg
+
+        cfg.MAX_TESTS = max_tests
 
     mode = "collect-only" if collect_only else "full"
     typer.echo(f"ODF z-stream pipeline ({mode}): {previous} -> {zstream}")

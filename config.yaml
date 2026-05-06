@@ -4,7 +4,7 @@ pipeline:
 
 test_selection:
   min_relevance_score: 0.7
-  max_tests: 30
+  max_tests: 50
   include_tiers: [tier1, tier2]
   always_include_marks: [acceptance]
   coverage_threshold: 0.8
