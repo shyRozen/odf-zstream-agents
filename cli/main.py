@@ -114,11 +114,12 @@ def run(
     selected = final_state.get("selected_tests") or []
     typer.echo(f"\n  Tests selected: {len(selected)}")
     if selected:
-        typer.echo(f"  {'Test':<60s} {'Score':>5s}  Squad")
-        typer.echo(f"  {'-'*60} {'-'*5}  {'-'*15}")
+        typer.echo(f"  {'Path':<50s} {'Score':>5s}  Squad")
+        typer.echo(f"  {'-'*50} {'-'*5}  {'-'*15}")
         for test in sorted(selected, key=lambda t: -t.relevance_score):
             marks = ", ".join(m for m in test.existing_marks if "squad" in m) or "?"
-            typer.echo(f"  {test.test_node_id:<60s} {test.relevance_score:5.2f}  {marks}")
+            path = test.file_path or test.test_node_id
+            typer.echo(f"  {path:<50s} {test.relevance_score:5.2f}  {marks}")
 
     coverage = final_state.get("coverage_report")
     if coverage:
