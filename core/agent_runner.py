@@ -43,7 +43,7 @@ def _run_claude_code(
         for t in allowed_tools:
             cmd.extend(["--allowedTools", t])
 
-    cmd.extend(["--prompt", prompt])
+    cmd.append(prompt)
 
     try:
         result = subprocess.run(

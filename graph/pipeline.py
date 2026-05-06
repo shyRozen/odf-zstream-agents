@@ -70,9 +70,12 @@ def inspect_wrapper(state: PipelineState) -> dict:
 
 def map_tests_wrapper(state: PipelineState) -> dict:
     """Run the Map Tests sub-graph and extract test selections + coverage."""
+    from core.test_map import get_map_summary
+
     sub_state: MapState = {}
     if "change_manifest" in state:
         sub_state["change_manifest"] = state["change_manifest"]
+    sub_state["test_map_context"] = get_map_summary()
     result = _get_map_tests_graph().invoke(sub_state)
     output: dict = {"current_stage": "map_tests"}
     if result.get("selected_tests"):
@@ -128,8 +131,13 @@ def notify_node(state: PipelineState) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def build_pipeline():
-    """Build and compile the top-level z-stream pipeline.
+def build_pipeline(collect_only: bool = False):
+    """Build and compile the z-stream pipeline.
+
+    Args:
+        collect_only: If True, build a pipeline that stops after
+            inspect + map_tests (stages 1-2).  Useful for previewing
+            which tests would be selected without triggering PR/Jenkins.
 
     Returns the compiled LangGraph runnable.
     """
@@ -138,20 +146,22 @@ def build_pipeline():
     # Sub-graph wrappers
     graph.add_node("inspect", inspect_wrapper)
     graph.add_node("map_tests", map_tests_wrapper)
-    graph.add_node("analyze", analyze_wrapper)
 
-    # Standalone nodes
-    graph.add_node("pr_builder", pr_builder_node)
-    graph.add_node("jenkins", jenkins_node)
-    graph.add_node("notify", notify_node)
-
-    # Wire the linear pipeline
     graph.add_edge(START, "inspect")
     graph.add_edge("inspect", "map_tests")
-    graph.add_edge("map_tests", "pr_builder")
-    graph.add_edge("pr_builder", "jenkins")
-    graph.add_edge("jenkins", "analyze")
-    graph.add_edge("analyze", "notify")
-    graph.add_edge("notify", END)
+
+    if collect_only:
+        graph.add_edge("map_tests", END)
+    else:
+        graph.add_node("analyze", analyze_wrapper)
+        graph.add_node("pr_builder", pr_builder_node)
+        graph.add_node("jenkins", jenkins_node)
+        graph.add_node("notify", notify_node)
+
+        graph.add_edge("map_tests", "pr_builder")
+        graph.add_edge("pr_builder", "jenkins")
+        graph.add_edge("jenkins", "analyze")
+        graph.add_edge("analyze", "notify")
+        graph.add_edge("notify", END)
 
     return graph.compile()

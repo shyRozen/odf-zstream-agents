@@ -47,6 +47,7 @@ class InspectState(TypedDict, total=False):
 
 class MapState(TypedDict, total=False):
     change_manifest: ChangeManifest
+    test_map_context: str
     search_areas: list[str]
     component_test_mapping: dict[str, list[str]]
     scored_tests: list[TestSelection]
