@@ -66,13 +66,21 @@ def _fallback_dirs(component: str) -> list[str]:
         "noobaa": ["tests/functional/object/mcg/"],
         "rgw": ["tests/functional/object/rgw/"],
         "rookceph": ["tests/functional/z_cluster/", "tests/functional/pod_and_daemons/"],
+        "rook": [
+            "tests/functional/z_cluster/",
+            "tests/functional/pod_and_daemons/",
+            "tests/functional/pv/",
+        ],
         "ocsoperator": ["tests/functional/z_cluster/", "tests/functional/deployment/"],
         "odfoperator": ["tests/functional/z_cluster/", "tests/functional/deployment/"],
         "odfconsole": ["tests/functional/ui/", "tests/cross_functional/ui/"],
         "managementconsole": ["tests/functional/ui/", "tests/cross_functional/ui/"],
         "monitoring": ["tests/functional/monitoring/"],
+        "cephmonitoring": ["tests/functional/monitoring/"],
+        "odfcli": ["tests/functional/odf-cli/"],
         "nfs": ["tests/functional/nfs_feature/"],
         "lvmo": ["tests/functional/lvmo/"],
         "lvm": ["tests/functional/lvmo/"],
+        "mustgather": ["tests/functional/z_cluster/"],
     }
     return mappings.get(c, ["tests/functional/"])

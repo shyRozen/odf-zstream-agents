@@ -137,6 +137,8 @@ JIRA_COMPONENT_MAP = {
     "build": "rook",
     "ceph/rados/x86": "rook",
     "ceph/rados/z": "rook",
+    "ceph-monitoring": "monitoring",
+    "odf-cli": "odf-cli",
     "documentation": "unknown",
     "must-gather": "must-gather",
 }

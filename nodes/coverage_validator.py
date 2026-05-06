@@ -221,6 +221,9 @@ def _validate_without_llm(
             "object",
             "bucket",
             "operator",
+            "odf-cli",
+            "cli",
+            "ceph-monitoring",
         ]:
             if comp_keyword in text:
                 covered_components.add(comp_keyword)
@@ -236,7 +239,9 @@ def _validate_without_llm(
         "ceph-csi": ["csi", "pv", "storageclass"],
         "odf-console": ["ui", "console"],
         "disaster-recovery": ["disaster", "disaster-recovery", "dr", "rdr", "mdr"],
-        "monitoring": ["monitor", "prometheus"],
+        "monitoring": ["monitor", "monitoring", "prometheus", "ceph-monitoring"],
+        "ceph-monitoring": ["monitor", "monitoring", "prometheus", "ceph-monitoring"],
+        "odf-cli": ["odf-cli", "cli", "odf_cli"],
         "nfs": ["nfs"],
         "lvmo": ["lvmo", "lvm"],
         "must-gather": ["must", "gather"],

@@ -62,5 +62,10 @@ squad_mapping:
   disaster-recovery: {squad: turquoise_squad, paths: ["tests/functional/disaster-recovery/"]}
   nfs: {squad: brown_squad, paths: ["tests/functional/nfs_feature/"]}
   ui: {squad: black_squad, paths: ["tests/functional/ui/", "tests/cross_functional/ui/"]}
-  rook: {squad: green_squad, paths: ["tests/functional/pv/", "tests/functional/pod_and_daemons/"]}
+  rook: {squad: green_squad, paths: ["tests/functional/pv/", "tests/functional/pod_and_daemons/", "tests/functional/z_cluster/"]}
+  odf-cli: {squad: brown_squad, paths: ["tests/functional/odf-cli/"]}
+  ocs-operator: {squad: brown_squad, paths: ["tests/functional/z_cluster/", "tests/functional/deployment/"]}
+  odf-operator: {squad: brown_squad, paths: ["tests/functional/z_cluster/", "tests/functional/deployment/"]}
+  odf-console: {squad: black_squad, paths: ["tests/functional/ui/", "tests/cross_functional/ui/"]}
+  must-gather: {squad: brown_squad, paths: ["tests/functional/z_cluster/"]}
   upgrade: {squad: various, paths: ["tests/functional/upgrade/"]}
