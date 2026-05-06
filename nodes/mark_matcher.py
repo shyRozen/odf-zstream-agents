@@ -1,8 +1,11 @@
-"""Mark Matcher node -- matches changes to pytest-marked tests.
+"""Mark Matcher node -- per-testcase selection using the test index.
 
-Expands matched test directories into individual test_*.py files
-using the local ocs-ci repo. Scores each file based on component
-and keyword relevance.
+Loads the pre-built test index (532 files, 1058 tests) and scores
+each test function against the z-stream changes based on:
+- Component match (from directory mapping)
+- Keyword overlap (bug summary vs test name/docstring/keywords)
+- Tier priority (tier1 > tier2 > tier3)
+- PR file path matching (if PR changed files are available)
 """
 
 from __future__ import annotations
@@ -13,11 +16,8 @@ from pathlib import Path
 from core import config
 from core.models import ChangeManifest, TestSelection
 from core.state import MapState
-from core.test_map import load_test_areas
 
 logger = logging.getLogger(__name__)
-
-OCS_CI_ROOT = Path(config.OCS_CI_REPO_PATH)
 
 
 def mark_matcher(state: MapState) -> dict:
@@ -29,40 +29,34 @@ def mark_matcher(state: MapState) -> dict:
         logger.warning("No search areas provided, nothing to match")
         return {"scored_tests": []}
 
-    scored_tests = _score_test_files(manifest, component_mapping, search_areas)
-    logger.info("Scored %d test files", len(scored_tests))
-    return {"scored_tests": scored_tests}
+    # Load the pre-built test index
+    try:
+        from tools.ocs_ci_scanner import load_index
 
+        index = load_index()
+    except Exception as e:
+        logger.error("Failed to load test index: %s", e)
+        return {"scored_tests": []}
 
-def _find_test_files(directory: str) -> list[Path]:
-    """Find all test_*.py files recursively under a directory."""
-    full_path = OCS_CI_ROOT / directory
-    if not full_path.exists():
-        return []
-    return sorted(full_path.rglob("test_*.py"))
-
-
-def _score_test_files(
-    manifest: ChangeManifest | None,
-    component_mapping: dict[str, list[str]],
-    search_areas: list[str],
-) -> list[TestSelection]:
+    # Build scoring context from changes
     changed_components = set()
     change_keywords: set[str] = set()
+    pr_changed_files: set[str] = set()
+
     if manifest:
         for change in manifest.changes:
             changed_components.add(change.component.lower())
+            # Keywords from summary
             for word in change.summary.lower().split():
-                if len(word) > 4:
+                if len(word) > 3 and word.isalpha():
                     change_keywords.add(word)
-
-    # Load map for squad info per directory
-    test_areas = load_test_areas()
-    dir_to_squad: dict[str, str] = {}
-    for area in test_areas:
-        d = area.get("directory", "").rstrip("/")
-        if d:
-            dir_to_squad[d] = area.get("squad", "")
+            # Files changed in PRs
+            for f in change.files_changed:
+                pr_changed_files.add(f.lower())
+                # Also extract filename without path
+                basename = f.split("/")[-1].replace(".py", "").replace(".go", "")
+                if len(basename) > 3:
+                    change_keywords.add(basename.lower())
 
     # Reverse mapping: dir -> component
     dir_to_component: dict[str, str] = {}
@@ -70,82 +64,150 @@ def _score_test_files(
         for d in dirs:
             dir_to_component[d.rstrip("/")] = comp
 
-    results = []
-    seen_files: set[str] = set()
+    # Normalize search areas
+    search_prefixes = [sa.rstrip("/") for sa in search_areas]
 
-    for search_area in search_areas:
-        test_files = _find_test_files(search_area)
-        if not test_files:
-            logger.warning("No test files found in %s", search_area)
+    # Score every test file in the index that falls within search areas
+    results: list[TestSelection] = []
+
+    for file_info in index.get("files", []):
+        file_path = file_info["file_path"]
+
+        # Check if file is in a search area
+        if not any(file_path.startswith(prefix) for prefix in search_prefixes):
             continue
 
-        area_key = search_area.rstrip("/")
-        comp = dir_to_component.get(area_key, "")
-        squad = dir_to_squad.get(area_key, "")
+        # Score each test function in the file
+        file_squad = file_info.get("squad", "")
+        file_marks = file_info.get("marks", [])
+        file_keywords = set(file_info.get("keywords", []))
+        file_tiers = file_info.get("tiers", [])
+        file_desc = file_info.get("description", "")
 
-        # Walk up to find squad if not found at exact dir level
-        if not squad:
-            for map_dir, map_squad in dir_to_squad.items():
-                if area_key.startswith(map_dir):
-                    squad = map_squad
-                    break
+        # Determine component from directory
+        file_dir = str(Path(file_path).parent)
+        comp = ""
+        for dir_key, dir_comp in dir_to_component.items():
+            if file_dir.startswith(dir_key.rstrip("/")):
+                comp = dir_comp
+                break
 
-        for test_file in test_files:
-            rel_path = str(test_file.relative_to(OCS_CI_ROOT))
-            if rel_path in seen_files:
+        for func in file_info.get("test_functions", []):
+            score = _score_test_function(
+                func=func,
+                file_path=file_path,
+                file_keywords=file_keywords,
+                file_tiers=file_tiers,
+                file_desc=file_desc,
+                component=comp,
+                changed_components=changed_components,
+                change_keywords=change_keywords,
+                pr_changed_files=pr_changed_files,
+            )
+
+            if score < config.MIN_RELEVANCE_SCORE:
                 continue
-            seen_files.add(rel_path)
 
-            score = _score_file(rel_path, test_file, comp, changed_components, change_keywords)
+            func_marks = func.get("marks", []) + file_marks
+            squad = file_squad
+            if not squad:
+                for m in func_marks:
+                    if "_squad" in m:
+                        squad = m.split(".")[-1].split("(")[0]
+                        break
+
+            node_id = f"{file_path}::{func['node_id']}"
 
             results.append(
                 TestSelection(
-                    test_node_id=rel_path,
-                    file_path=rel_path,
+                    test_node_id=node_id,
+                    file_path=file_path,
                     relevance_score=round(score, 2),
-                    reason=f"{comp or 'matched'} ({squad})",
+                    reason=_build_reason(func, comp, score),
                     existing_marks=[squad] if squad else [],
                 )
             )
 
+    # Sort by score descending, cap at MAX_TESTS
     results.sort(key=lambda t: -t.relevance_score)
-    return results
+    if len(results) > config.MAX_TESTS:
+        results = results[: config.MAX_TESTS]
+
+    logger.info(
+        "Selected %d test cases (from %d files in search areas)",
+        len(results),
+        len(index.get("files", [])),
+    )
+    return {"scored_tests": results}
 
 
-def _score_file(
-    rel_path: str,
-    file_path: Path,
+def _score_test_function(
+    func: dict,
+    file_path: str,
+    file_keywords: set[str],
+    file_tiers: list[str],
+    file_desc: str,
     component: str,
     changed_components: set[str],
     change_keywords: set[str],
+    pr_changed_files: set[str],
 ) -> float:
-    """Score an individual test file's relevance."""
-    score = 0.5
+    """Score a single test function's relevance to the z-stream changes."""
+    score = 0.3  # base for being in a search area
 
-    # Component match — strongest signal
+    # 1. Component match (strongest signal)
     if component and component.lower() in changed_components:
-        score = 0.8
+        score = 0.7
 
-    # Path-based component match
-    path_lower = rel_path.lower()
+    # 2. Path-based match
+    path_lower = file_path.lower()
     if any(c in path_lower for c in changed_components):
+        score = max(score, 0.65)
+
+    # 3. Keyword overlap between change summaries and test
+    func_name = func.get("name", "").lower()
+    func_doc = func.get("docstring", "").lower()
+    func_text = f"{func_name} {func_doc}"
+
+    # Extract test keywords
+    test_words = set()
+    for word in func_name.replace("test_", "").split("_"):
+        if len(word) > 2:
+            test_words.add(word)
+    test_words.update(file_keywords)
+
+    keyword_hits = len(change_keywords & test_words)
+    if keyword_hits >= 3:
+        score = max(score, 0.85)
+    elif keyword_hits >= 2:
         score = max(score, 0.75)
+    elif keyword_hits >= 1:
+        score = min(score + 0.1, 1.0)
 
-    # Read first 50 lines for keyword matching
-    try:
-        head = file_path.read_text(errors="ignore").split("\n")[:50]
-        file_text = " ".join(head).lower()
+    # 4. PR file path matching (most precise)
+    if pr_changed_files:
+        for pr_file in pr_changed_files:
+            pr_basename = pr_file.split("/")[-1].replace(".go", "").replace(".py", "")
+            if pr_basename in func_text or pr_basename in " ".join(file_keywords):
+                score = max(score, 0.9)
+                break
 
-        # Check for tier1 mark
-        if "@tier1" in file_text or "tier1" in file_text:
-            score = min(score + 0.1, 1.0)
+    # 5. Tier boost
+    if "tier1" in file_tiers:
+        score = min(score + 0.05, 1.0)
 
-        # Keyword match from change summaries
-        hits = sum(1 for kw in change_keywords if kw in file_text)
-        if hits > 0:
-            score = min(score + 0.05 * min(hits, 4), 1.0)
+    return min(score, 1.0)
 
-    except Exception:
-        pass
 
-    return score
+def _build_reason(func: dict, component: str, score: float) -> str:
+    """Build a human-readable reason for the score."""
+    parts = []
+    if component:
+        parts.append(component)
+    doc = func.get("docstring", "")
+    if doc:
+        first_line = doc.split("\n")[0][:60]
+        parts.append(first_line)
+    else:
+        parts.append(func.get("name", ""))
+    return " | ".join(parts)
