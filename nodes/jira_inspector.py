@@ -129,6 +129,7 @@ JIRA_COMPONENT_MAP = {
     "rook": "rook",
     "csi-driver": "ceph-csi",
     "csi-addons": "ceph-csi",
+    "ceph-csi-operator": "ceph-csi",
     "ocs-operator": "ocs-operator",
     "ocs-client-operator": "ocs-operator",
     "odf-operator": "odf-operator",
