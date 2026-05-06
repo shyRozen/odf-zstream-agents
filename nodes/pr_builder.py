@@ -71,7 +71,6 @@ def pr_builder(state: PipelineState) -> dict:
                 github_add_mark_to_test(
                     branch=branch_name,
                     file_path=test.file_path,
-                    test_node_id=test.test_node_id,
                     mark_name=mark_name,
                 )
                 marked_count += 1
