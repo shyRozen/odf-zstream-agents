@@ -121,6 +121,8 @@ def run(
                 f"    {change.id:16s} [{change.severity.value:8s}] "
                 f"[{change.component}] {change.summary[:60]}"
             )
+            for pr_url in change.linked_commits:
+                typer.echo(f"      PR: {pr_url}")
 
     selected = final_state.get("selected_tests") or []
     typer.echo(f"\n  Tests selected: {len(selected)}")
