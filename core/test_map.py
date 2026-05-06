@@ -80,7 +80,11 @@ def load_test_areas(map_dir: Path | None = None) -> list[dict]:
     root = map_dir or ensure_map()
     areas = []
 
-    for test_dir in [root / "tests" / "functional", root / "tests" / "cross_functional", root / "tests" / "libtest"]:
+    for test_dir in [
+        root / "tests" / "functional",
+        root / "tests" / "cross_functional",
+        root / "tests" / "libtest",
+    ]:
         if not test_dir.exists():
             continue
         for md_file in sorted(test_dir.glob("*.md")):
@@ -182,8 +186,7 @@ def get_map_summary(map_dir: Path | None = None) -> str:
     lines.append("Components:")
     for name, data in components.items():
         lines.append(
-            f"  - {name}: squad={data.get('squad', '?')}, "
-            f"areas={data.get('test_areas', [])}"
+            f"  - {name}: squad={data.get('squad', '?')}, " f"areas={data.get('test_areas', [])}"
         )
 
     return "\n".join(lines)

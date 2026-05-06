@@ -1,70 +1,110 @@
-"""Jira Inspector node -- queries Jira for z-stream changes.
+"""Jira Inspector node -- queries Jira for z-stream bugs and their PRs.
 
-Uses the unified agent runner to extract structured Change objects from Jira
-search results.  Falls back to deterministic parsing when the agent is
-unavailable.
+Fetches bugs from DFBUGS project, extracts GitHub PR URLs from
+remote links, and builds Change objects with PR references.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
-from core.agent_runner import run_node_json
 from core.models import Change, ChangeSource, ChangeType, Severity, StageError
 from core.state import InspectState
 
 logger = logging.getLogger(__name__)
 
+PRIORITY_TO_SEVERITY = {
+    "blocker": Severity.CRITICAL,
+    "critical": Severity.CRITICAL,
+    "major": Severity.MAJOR,
+    "normal": Severity.MINOR,
+    "minor": Severity.MINOR,
+    "trivial": Severity.LOW,
+}
+
 
 def jira_inspector(state: InspectState) -> dict:
-    """Query Jira for bug fixes targeted at the z-stream version.
-
-    Returns a dict with ``jira_changes`` populated.
-    """
     version = state.get("zstream_version", "")
     if not version:
-        logger.warning("No zstream_version provided, skipping Jira inspection")
         return {"jira_changes": []}
 
     try:
-        prompt = (
-            f"You are a Jira issue analyst for ODF (OpenShift Data Foundation) "
-            f"z-stream releases.\n\n"
-            f"Query Jira for ODF bugs fixed in version {version}.\n\n"
-            f"Steps:\n"
-            f"1. Use curl to query the Jira REST API for issues with "
-            f'   fixVersion="{version}" in the ODF project that are Closed, '
-            f"   Resolved, or Verified.  Sort by priority DESC.\n"
-            f"2. For each issue found, fetch its full details.\n"
-            f"3. Extract structured change information.\n\n"
-            f"For each issue, produce a JSON object with these fields:\n"
-            f'- "id": the Jira issue key (e.g. "ODF-1234")\n'
-            f'- "component": the ODF component affected (e.g. "ocs-operator", '
-            f'  "rook-ceph", "noobaa", "ceph-csi", "odf-console")\n'
-            f'- "type": one of "bugfix", "security", "enhancement"\n'
-            f'- "severity": one of "critical", "major", "minor", "low"\n'
-            f'- "summary": a concise description of the change\n'
-            f'- "files_changed": list of files mentioned in the issue '
-            f"  (empty list if none)\n"
-            f'- "linked_errata": errata advisory ID if mentioned (null otherwise)\n'
-            f'- "linked_commits": list of commit hashes if mentioned '
-            f"  (empty list if none)\n\n"
-            f"Return ONLY a JSON array of these objects."
-        )
+        from tools.jira_tools import jira_search
+    except ImportError:
+        return {
+            "jira_changes": [],
+            "errors": [
+                StageError(
+                    stage="jira_inspector",
+                    error="jira_tools not available",
+                    timestamp=datetime.utcnow().isoformat(),
+                    recoverable=True,
+                )
+            ],
+        }
 
-        raw = run_node_json(
-            prompt,
-            "jira_inspector",
-            allowed_tools=["Bash(curl*)", "WebFetch"],
-        )
+    try:
+        raw_result = jira_search(version)
+        data = json.loads(raw_result) if isinstance(raw_result, str) else raw_result
 
-        if raw is None:
-            logger.warning("Agent returned no parseable JSON, using empty list")
+        if "error" in data:
+            logger.error("Jira search error: %s", data["error"])
+            return {
+                "jira_changes": [],
+                "errors": [
+                    StageError(
+                        stage="jira_inspector",
+                        error=f"Jira API: {data['error']}",
+                        timestamp=datetime.utcnow().isoformat(),
+                        recoverable=True,
+                    )
+                ],
+            }
+
+        issues = data.get("issues", [])
+        if not issues:
+            logger.info("No Jira issues found for version %s", version)
             return {"jira_changes": []}
 
-        changes = _parse_raw_changes(raw)
-        logger.info("Extracted %d changes from Jira", len(changes))
+        changes = []
+        total_prs = 0
+        for issue in issues:
+            summary = issue.get("summary", "")
+            priority = issue.get("priority", "normal").lower()
+            components = issue.get("components", [])
+            raw_comp = components[0] if components else ""
+            component = _normalize_component(raw_comp) if raw_comp else _guess_component(summary)
+            pr_urls = issue.get("pr_urls", [])
+            total_prs += len(pr_urls)
+
+            change_type = ChangeType.BUGFIX
+            if "cve" in summary.lower():
+                change_type = ChangeType.SECURITY
+            elif "enhancement" in issue.get("issuetype", "").lower():
+                change_type = ChangeType.ENHANCEMENT
+
+            changes.append(
+                Change(
+                    id=issue.get("key", "UNKNOWN"),
+                    source=ChangeSource.JIRA,
+                    component=component,
+                    type=change_type,
+                    severity=PRIORITY_TO_SEVERITY.get(priority, Severity.MINOR),
+                    summary=summary,
+                    files_changed=[],
+                    linked_errata=None,
+                    linked_commits=pr_urls,
+                )
+            )
+
+        logger.info(
+            "Found %d bugs, %d PRs for version %s",
+            len(changes),
+            total_prs,
+            version,
+        )
         return {"jira_changes": changes}
 
     except Exception as e:
@@ -82,38 +122,51 @@ def jira_inspector(state: InspectState) -> dict:
         }
 
 
-# ------------------------------------------------------------------
-# Parsing helpers
-# ------------------------------------------------------------------
+JIRA_COMPONENT_MAP = {
+    "management-console": "odf-console",
+    "multi-cloud object gateway": "mcg",
+    "noobaa-nc": "mcg",
+    "rook": "rook",
+    "csi-driver": "ceph-csi",
+    "csi-addons": "ceph-csi",
+    "ocs-operator": "ocs-operator",
+    "ocs-client-operator": "ocs-operator",
+    "odf-operator": "odf-operator",
+    "odf-dr/ramen": "disaster-recovery",
+    "multicluster-orchestrator": "disaster-recovery",
+    "build": "rook",
+    "ceph/rados/x86": "rook",
+    "ceph/rados/z": "rook",
+    "documentation": "unknown",
+    "must-gather": "must-gather",
+}
 
 
-def _parse_raw_changes(raw: dict | list) -> list[Change]:
-    """Convert agent JSON output into a list of Change objects."""
-    items = raw if isinstance(raw, list) else [raw]
-    changes = []
-    for item in items:
-        try:
-            changes.append(
-                Change(
-                    id=item.get("id", "UNKNOWN"),
-                    source=ChangeSource.JIRA,
-                    component=item.get("component", "unknown"),
-                    type=_safe_enum(ChangeType, item.get("type", "bugfix"), ChangeType.BUGFIX),
-                    severity=_safe_enum(Severity, item.get("severity", "minor"), Severity.MINOR),
-                    summary=item.get("summary", ""),
-                    files_changed=item.get("files_changed", []),
-                    linked_errata=item.get("linked_errata"),
-                    linked_commits=item.get("linked_commits", []),
-                )
-            )
-        except Exception as e:
-            logger.warning("Failed to parse change from agent output: %s", e)
-    return changes
+def _normalize_component(raw: str) -> str:
+    """Map DFBUGS component names to our standard component names."""
+    return JIRA_COMPONENT_MAP.get(raw.lower(), raw)
 
 
-def _safe_enum(enum_cls, value: str, default):
-    """Safely convert a string to an enum value."""
-    try:
-        return enum_cls(value.lower())
-    except (ValueError, AttributeError):
-        return default
+def _guess_component(summary: str) -> str:
+    s = summary.lower()
+    for keyword, comp in [
+        ("console", "odf-console"),
+        ("noobaa", "mcg"),
+        ("mcg", "mcg"),
+        ("rgw", "mcg"),
+        ("csi", "ceph-csi"),
+        ("rook", "rook"),
+        ("ceph", "rook"),
+        ("ocs-operator", "ocs-operator"),
+        ("odf-operator", "odf-operator"),
+        ("ramen", "disaster-recovery"),
+        ("rdr", "disaster-recovery"),
+        ("mdr", "disaster-recovery"),
+        ("monitor", "monitoring"),
+        ("nfs", "nfs"),
+        ("lvmo", "lvmo"),
+        ("lvm", "lvmo"),
+    ]:
+        if keyword in s:
+            return comp
+    return "unknown"

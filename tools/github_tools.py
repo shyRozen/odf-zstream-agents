@@ -295,8 +295,69 @@ def github_comment_pr(pr_number: int, comment: str) -> str:
         return json.dumps({"error": f"Failed to comment on PR #{pr_number}: {str(exc)}"})
 
 
+def github_get_pr_files(pr_url: str) -> str:
+    """Fetch the list of changed files from a GitHub PR.
+
+    Works with any GitHub repo, not just ocs-ci. Parses the PR URL
+    to extract owner/repo/number.
+
+    Args:
+        pr_url: Full GitHub PR URL (e.g. "https://github.com/red-hat-storage/rook/pull/1136")
+
+    Returns:
+        JSON string with repo, pr_number, and list of changed files
+        with filename, status, additions, deletions, and patch snippet.
+    """
+    import re
+
+    match = re.match(r"https?://github\.com/([^/]+)/([^/]+)/pull/(\d+)", pr_url)
+    if not match:
+        return json.dumps({"error": f"Cannot parse PR URL: {pr_url}"})
+
+    owner, repo_name, pr_number = match.group(1), match.group(2), int(match.group(3))
+
+    if not config.GITHUB_TOKEN:
+        return json.dumps({"error": "GITHUB_TOKEN not configured"})
+
+    try:
+        from github import Github
+
+        gh = Github(config.GITHUB_TOKEN)
+        repo = gh.get_repo(f"{owner}/{repo_name}")
+        pr = repo.get_pull(pr_number)
+
+        files = []
+        for f in pr.get_files():
+            files.append(
+                {
+                    "filename": f.filename,
+                    "status": f.status,
+                    "additions": f.additions,
+                    "deletions": f.deletions,
+                    "changes": f.changes,
+                    "patch": (f.patch or "")[:500],
+                }
+            )
+
+        return json.dumps(
+            {
+                "repo": f"{owner}/{repo_name}",
+                "pr_number": pr_number,
+                "title": pr.title,
+                "state": pr.state,
+                "files_changed": len(files),
+                "files": files,
+            },
+            indent=2,
+        )
+
+    except Exception as exc:
+        return json.dumps({"error": f"Failed to fetch PR {pr_url}: {str(exc)}"})
+
+
 # Tool-wrapped versions for LangGraph ReAct agents
 github_create_branch_tool = tool(github_create_branch)
 github_add_mark_to_test_tool = tool(github_add_mark_to_test)
 github_create_pr_tool = tool(github_create_pr)
 github_comment_pr_tool = tool(github_comment_pr)
+github_get_pr_files_tool = tool(github_get_pr_files)

@@ -15,6 +15,7 @@ from core.agent_runner import run_node_json
 from core import config
 from core.models import ChangeManifest, TestSelection
 from core.state import MapState
+from core.test_map import load_test_areas
 
 logger = logging.getLogger(__name__)
 
@@ -35,78 +36,10 @@ def mark_matcher(state: MapState) -> dict:
         logger.warning("No search areas provided, nothing to match")
         return {"scored_tests": []}
 
-    # Build change summary for the prompt
-    change_summary = _build_change_summary(manifest)
-
-    # Build the full prompt with all context
-    search_areas_json = json.dumps(search_areas, indent=2)
-    manifest_json = json.dumps(
-        [c.model_dump(mode="json") for c in manifest.changes] if manifest else [],
-        indent=2,
-    )
-    mapping_json = json.dumps(component_mapping, indent=2)
-
-    try:
-        prompt = (
-            f"You are a senior QE engineer for ODF (OpenShift Data Foundation).\n\n"
-            f"Read tests in these directories, score their relevance to these "
-            f"z-stream changes (0.0-1.0).\n\n"
-            f"Search areas (test directories to explore):\n{search_areas_json}\n\n"
-            f"Component-to-test mapping:\n{mapping_json}\n\n"
-            f"Z-stream changes:\n{change_summary}\n\n"
-            f"Full change manifest:\n{manifest_json}\n\n"
-            f"Instructions:\n"
-            f"1. Use find/grep to discover test files in the search areas.\n"
-            f"2. Read test code to understand what each test validates.\n"
-            f"3. Check existing pytest marks (e.g. @pytest.mark.tier1, "
-            f"   @pytest.mark.brown_squad).\n"
-            f"4. Score each test's relevance from 0.0 to 1.0:\n"
-            f"   - 1.0: directly validates the exact fix/change\n"
-            f"   - 0.8-0.9: covers the same component and feature area\n"
-            f"   - 0.6-0.7: covers related functionality\n"
-            f"   - 0.3-0.5: tangentially related\n"
-            f"   - 0.0-0.2: unrelated\n\n"
-            f"For each test, output a JSON object with:\n"
-            f'- "test_node_id": the full pytest node ID '
-            f"  (file::class::test or file::test)\n"
-            f'- "file_path": the test file path\n'
-            f'- "relevance_score": float 0.0-1.0\n'
-            f'- "reason": brief explanation of the score\n'
-            f'- "existing_marks": list of existing pytest marks\n\n'
-            f"Return ONLY a JSON array of these objects."
-        )
-
-        raw = run_node_json(
-            prompt,
-            "mark_matcher",  # This is in OPUS_NODES, so Opus will be used
-            allowed_tools=[
-                "Read",
-                "Bash(find*)",
-                "Bash(grep*)",
-                "Bash(cat*)",
-                "Bash(head*)",
-            ],
-            cwd=config.OCS_CI_REPO_PATH,
-        )
-
-        if raw is not None:
-            scored_tests = _parse_scored_results(raw)
-            if scored_tests:
-                scored_tests.sort(key=lambda t: t.relevance_score, reverse=True)
-                logger.info(
-                    "Scored %d tests, top score: %.2f",
-                    len(scored_tests),
-                    scored_tests[0].relevance_score,
-                )
-                return {"scored_tests": scored_tests}
-
-        logger.warning("Agent returned no usable scored tests, using heuristic")
-
-    except Exception as e:
-        logger.error("Agent mark matching failed: %s, using heuristic", e)
-
-    # Fallback: heuristic scoring
-    return {"scored_tests": _score_heuristic(manifest, component_mapping, search_areas)}
+    # Use codebase map + heuristic scoring (fast, deterministic)
+    scored_tests = _score_heuristic(manifest, component_mapping, search_areas)
+    logger.info("Scored %d test areas using codebase map", len(scored_tests))
+    return {"scored_tests": scored_tests}
 
 
 # ------------------------------------------------------------------
@@ -164,19 +97,23 @@ def _score_heuristic(
     component_mapping: dict[str, list[str]],
     search_areas: list[str],
 ) -> list[TestSelection]:
-    """Heuristic fallback scoring when agent is unavailable.
+    """Heuristic scoring using the pre-built codebase map.
 
     Scores based on:
-    - Whether the test directory matches a changed component (0.7 base)
-    - Whether keywords from change summaries appear in the directory path
+    - Whether the test area matches a changed component (0.8 base)
+    - Tier1 tests get a boost
+    - Keyword overlap with change summaries
     """
     changed_components = set()
     change_keywords: set[str] = set()
     if manifest:
         for change in manifest.changes:
-            changed_components.add(change.component)
+            changed_components.add(change.component.lower())
             words = change.summary.lower().split()
             change_keywords.update(w for w in words if len(w) > 4)
+
+    # Load test areas from the codebase map
+    test_areas = load_test_areas()
 
     # Build reverse mapping: dir -> component
     dir_to_component: dict[str, str] = {}
@@ -185,27 +122,45 @@ def _score_heuristic(
             dir_to_component[d] = comp
 
     results = []
-    for area in search_areas:
-        score = 0.3  # base
+    for area in test_areas:
+        area_dir = area.get("directory", "")
 
-        # Check component match
-        comp = dir_to_component.get(area, "")
-        if comp and comp in changed_components:
+        # Only consider areas that match our search areas
+        if not any(area_dir.startswith(sa.rstrip("/")) for sa in search_areas):
+            continue
+
+        test_count = area.get("test_functions", 0)
+        if test_count == 0:
+            continue
+
+        squad = area.get("squad", "")
+        tiers = area.get("tiers", {})
+        score = 0.5
+
+        # Component match
+        comp = dir_to_component.get(area_dir, "")
+        if comp and comp.lower() in changed_components:
+            score = 0.8
+        elif any(c in area_dir.lower() for c in changed_components):
             score = 0.7
 
-        # Keyword match boost
-        area_lower = area.lower()
-        keyword_hits = sum(1 for kw in change_keywords if kw in area_lower)
-        if keyword_hits > 0:
-            score = min(score + 0.05 * keyword_hits, 1.0)
+        # Tier1 boost
+        if tiers.get("tier1", 0) > 0:
+            score = min(score + 0.1, 1.0)
+
+        # Keyword match
+        area_text = (area_dir + " " + area.get("body", "")).lower()
+        hits = sum(1 for kw in change_keywords if kw in area_text)
+        if hits > 0:
+            score = min(score + 0.05 * min(hits, 4), 1.0)
 
         results.append(
             TestSelection(
-                test_node_id=area,
-                file_path=area,
+                test_node_id=area.get("name", area_dir),
+                file_path=area_dir,
                 relevance_score=round(score, 2),
-                reason="Heuristic scoring (agent unavailable)",
-                existing_marks=[],
+                reason=f"{test_count} tests ({squad}, tier1={tiers.get('tier1', 0)})",
+                existing_marks=[squad] if squad else [],
             )
         )
 

@@ -55,10 +55,7 @@ def merge_manifest(state: InspectState) -> dict:
         logger.info("Only one source has changes, skipping dedup")
         merged = all_changes
     else:
-        merged = _merge_with_agent(jira_changes, errata_changes, git_changes, version)
-        if not merged:
-            # Fallback: simple dedup if agent fails
-            merged = _merge_without_llm(jira_changes, errata_changes, git_changes)
+        merged = _merge_without_llm(jira_changes, errata_changes, git_changes)
 
     # Build coverage summary
     by_component: dict[str, int] = {}

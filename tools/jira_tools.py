@@ -30,6 +30,27 @@ def _fix_version_name(version: str) -> str:
     return f"odf-{version}"
 
 
+def _fetch_remote_links(issue_key: str) -> list[str]:
+    """Fetch GitHub PR URLs from an issue's remote links."""
+    auth = _jira_auth()
+    if not auth or not config.JIRA_URL:
+        return []
+    url = f"{config.JIRA_URL.rstrip('/')}/rest/api/3/issue/{issue_key}/remotelink"
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(url, headers=_jira_headers(), auth=auth)
+            resp.raise_for_status()
+            links = resp.json()
+        return [
+            link["object"]["url"]
+            for link in links
+            if "github.com" in link.get("object", {}).get("url", "")
+            and "/pull/" in link.get("object", {}).get("url", "")
+        ]
+    except Exception:
+        return []
+
+
 def jira_search(version: str, project: str = "DFBUGS") -> str:
     """Search Jira for issues with a given fixVersion in a project.
 
@@ -53,34 +74,37 @@ def jira_search(version: str, project: str = "DFBUGS") -> str:
         return json.dumps({"error": "JIRA_EMAIL or JIRA_API_TOKEN not configured"})
 
     fix_ver = _fix_version_name(version)
-    jql = (
-        f'project = "{project}" AND fixVersion = "{fix_ver}" '
-        f"ORDER BY priority DESC"
-    )
+    jql = f'project = "{project}" AND fixVersion = "{fix_ver}" ' f"ORDER BY priority DESC"
     url = f"{config.JIRA_URL.rstrip('/')}/rest/api/3/search/jql"
     payload = {
         "jql": jql,
         "maxResults": 200,
         "fields": [
-            "summary", "status", "priority", "components",
-            "labels", "fixVersions", "issuetype", "assignee",
+            "summary",
+            "status",
+            "priority",
+            "components",
+            "labels",
+            "fixVersions",
+            "issuetype",
+            "assignee",
         ],
     }
 
     try:
         with httpx.Client(timeout=30) as client:
-            resp = client.post(
-                url, json=payload, headers=_jira_headers(), auth=auth
-            )
+            resp = client.post(url, json=payload, headers=_jira_headers(), auth=auth)
             resp.raise_for_status()
             data = resp.json()
 
         issues = []
         for issue in data.get("issues", []):
             fields = issue.get("fields", {})
+            key = issue["key"]
+            pr_urls = _fetch_remote_links(key)
             issues.append(
                 {
-                    "key": issue["key"],
+                    "key": key,
                     "summary": fields.get("summary", ""),
                     "status": fields.get("status", {}).get("name", ""),
                     "priority": fields.get("priority", {}).get("name", ""),
@@ -88,6 +112,7 @@ def jira_search(version: str, project: str = "DFBUGS") -> str:
                     "components": [c.get("name", "") for c in fields.get("components", [])],
                     "labels": fields.get("labels", []),
                     "fixVersions": [v.get("name", "") for v in fields.get("fixVersions", [])],
+                    "pr_urls": pr_urls,
                     "assignee": (
                         fields.get("assignee", {}).get("displayName", "Unassigned")
                         if fields.get("assignee")

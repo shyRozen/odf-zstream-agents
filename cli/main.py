@@ -117,12 +117,8 @@ def run(
         typer.echo(f"  {'Test':<60s} {'Score':>5s}  Squad")
         typer.echo(f"  {'-'*60} {'-'*5}  {'-'*15}")
         for test in sorted(selected, key=lambda t: -t.relevance_score):
-            marks = ", ".join(
-                m for m in test.existing_marks if "squad" in m
-            ) or "?"
-            typer.echo(
-                f"  {test.test_node_id:<60s} {test.relevance_score:5.2f}  {marks}"
-            )
+            marks = ", ".join(m for m in test.existing_marks if "squad" in m) or "?"
+            typer.echo(f"  {test.test_node_id:<60s} {test.relevance_score:5.2f}  {marks}")
 
     coverage = final_state.get("coverage_report")
     if coverage:

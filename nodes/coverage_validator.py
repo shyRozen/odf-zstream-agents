@@ -59,8 +59,8 @@ def coverage_validator(state: MapState) -> dict:
             "attempt_count": attempt,
         }
 
-    # Determine coverage using agent or fallback
-    gap_details = _validate_coverage(manifest, selected)
+    # Deterministic coverage check
+    gap_details = _validate_without_llm(manifest, selected)
 
     total = len(manifest.changes)
     gaps = len(gap_details)
@@ -194,8 +194,7 @@ def _validate_without_llm(
     # Build set of covered components from test file paths and reasons
     covered_components: set[str] = set()
     for test in selected:
-        path_lower = test.file_path.lower()
-        reason_lower = test.reason.lower()
+        text = f"{test.file_path} {test.reason} {test.test_node_id}".lower()
         for comp_keyword in [
             "ocs",
             "odf",
@@ -210,18 +209,37 @@ def _validate_without_llm(
             "console",
             "deploy",
             "upgrade",
+            "disaster",
+            "disaster-recovery",
+            "dr",
+            "monitor",
+            "nfs",
+            "lvmo",
+            "lvm",
+            "z_cluster",
+            "pod_and_daemons",
+            "object",
+            "bucket",
+            "operator",
         ]:
-            if comp_keyword in path_lower or comp_keyword in reason_lower:
+            if comp_keyword in text:
                 covered_components.add(comp_keyword)
 
     # Map components to their keywords for matching
     component_keywords = {
-        "ocs-operator": ["ocs", "operator"],
-        "odf-operator": ["odf", "operator"],
-        "rook-ceph": ["rook", "ceph"],
+        "ocs-operator": ["ocs", "operator", "deploy", "z_cluster"],
+        "odf-operator": ["odf", "operator", "deploy"],
+        "rook": ["rook", "ceph", "z_cluster", "pod_and_daemons", "pv"],
+        "rook-ceph": ["rook", "ceph", "z_cluster", "pod_and_daemons", "pv"],
+        "mcg": ["noobaa", "mcg", "rgw", "object", "bucket"],
         "noobaa": ["noobaa", "mcg", "rgw", "object", "bucket"],
         "ceph-csi": ["csi", "pv", "storageclass"],
         "odf-console": ["ui", "console"],
+        "disaster-recovery": ["disaster", "disaster-recovery", "dr", "rdr", "mdr"],
+        "monitoring": ["monitor", "prometheus"],
+        "nfs": ["nfs"],
+        "lvmo": ["lvmo", "lvm"],
+        "must-gather": ["must", "gather"],
         "deployment": ["deploy", "upgrade", "install"],
     }
 
