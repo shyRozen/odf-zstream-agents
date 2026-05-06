@@ -276,9 +276,26 @@ def build_index(force: bool = False) -> Path:
 
 
 def load_index() -> dict:
-    """Load the test index from disk. Builds if not present."""
-    if not INDEX_PATH.exists():
-        build_index()
+    """Load the test index from the codebase map repo.
 
+    The index lives in the map repo at test-index.json. Falls back to
+    local cache if the map repo isn't available.
+    """
+    from core.test_map import ensure_map
+
+    map_dir = ensure_map()
+    map_index = map_dir / "test-index.json"
+
+    if map_index.exists():
+        with open(map_index) as f:
+            return json.load(f)
+
+    # Fallback to local cache
+    if INDEX_PATH.exists():
+        with open(INDEX_PATH) as f:
+            return json.load(f)
+
+    # Last resort: build from source
+    build_index()
     with open(INDEX_PATH) as f:
         return json.load(f)
