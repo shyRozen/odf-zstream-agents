@@ -35,14 +35,8 @@ def coverage_validator(state: MapState) -> dict:
     min_score = config.MIN_RELEVANCE_SCORE
     max_tests = config.MAX_TESTS
 
-    # Filter tests by minimum relevance score
-    selected = [t for t in scored_tests if t.relevance_score >= min_score]
-
-    # Cap at max tests (take highest-scored)
-    selected.sort(key=lambda t: t.relevance_score, reverse=True)
-    if len(selected) > max_tests:
-        logger.info("Capping test selection from %d to %d", len(selected), max_tests)
-        selected = selected[:max_tests]
+    # Accept tests as-is from mark_matcher (already scored, filtered, and capped)
+    selected = scored_tests
 
     if not manifest or not manifest.changes:
         logger.info("No changes to validate coverage against")

@@ -135,11 +135,55 @@ def mark_matcher(state: MapState) -> dict:
     if results:
         top_score = results[0].relevance_score
         dynamic_cutoff = max(top_score * 0.7, config.MIN_RELEVANCE_SCORE)
-        results = [t for t in results if t.relevance_score >= dynamic_cutoff]
+        above_cutoff = [t for t in results if t.relevance_score >= dynamic_cutoff]
+        below_cutoff = [t for t in results if t.relevance_score < dynamic_cutoff]
 
-    # Cap at MAX_TESTS
-    if len(results) > config.MAX_TESTS:
-        results = results[: config.MAX_TESTS]
+        # Guarantee at least one test per changed component
+        covered_components = set()
+        for t in above_cutoff:
+            for comp in changed_components:
+                if comp in t.file_path.lower() or comp in t.reason.lower():
+                    covered_components.add(comp)
+
+        for comp in changed_components - covered_components:
+            for t in below_cutoff:
+                if comp in t.file_path.lower() or comp in t.reason.lower():
+                    above_cutoff.append(t)
+                    covered_components.add(comp)
+                    logger.info(
+                        "Force-included test for uncovered component '%s': %s (%.2f)",
+                        comp,
+                        t.test_node_id,
+                        t.relevance_score,
+                    )
+                    break
+
+        results = above_cutoff
+
+    # Guarantee at least one test per changed component before capping
+    selected_set = set(t.test_node_id for t in results[: config.MAX_TESTS])
+    top_results = results[: config.MAX_TESTS]
+    overflow = results[config.MAX_TESTS :]
+
+    covered_in_top = set()
+    for t in top_results:
+        for comp in changed_components:
+            if comp in t.file_path.lower():
+                covered_in_top.add(comp)
+
+    for comp in changed_components - covered_in_top:
+        for t in overflow:
+            if comp in t.file_path.lower():
+                top_results.append(t)
+                logger.info(
+                    "Force-included test for '%s': %s (%.2f)",
+                    comp,
+                    t.test_node_id.split("::")[-1],
+                    t.relevance_score,
+                )
+                break
+
+    results = top_results
 
     logger.info(
         "Selected %d test cases (from %d files in search areas)",
@@ -203,12 +247,12 @@ def _score_test_function(
     elif keyword_hits == 1:
         score = max(score, 0.55)
 
-    # 3. Component match — necessary but not sufficient
+    # 3. Component match — guarantees the test is considered
     if component and component.lower() in changed_components:
-        score = max(score, 0.50)
+        score = max(score, 0.70)
     path_lower = file_path.lower()
     if any(c in path_lower for c in changed_components):
-        score = max(score, 0.45)
+        score = max(score, 0.70)
 
     # 4. Tier1 boost (small — shouldn't push irrelevant tests over threshold)
     if "tier1" in file_tiers:
