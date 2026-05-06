@@ -23,16 +23,24 @@ def _jira_auth() -> tuple[str, str] | None:
     return None
 
 
-def jira_search(version: str, project: str = "ODF") -> str:
+def _fix_version_name(version: str) -> str:
+    """Build fixVersion string. If version doesn't start with 'odf-', prefix it."""
+    if version.startswith("odf-"):
+        return version
+    return f"odf-{version}"
+
+
+def jira_search(version: str, project: str = "DFBUGS") -> str:
     """Search Jira for issues with a given fixVersion in a project.
 
-    Queries the Jira Cloud REST API v3 for all issues matching the specified
-    fix version and project. Returns key fields: key, summary, status, priority,
-    components, labels, and fix versions.
+    Queries the Jira Cloud REST API v3 (POST /search/jql) for all issues
+    matching the specified fix version and project. The version is
+    automatically prefixed with ``odf-`` if needed (e.g. "4.17.2" becomes
+    "odf-4.17.2").
 
     Args:
-        version: The fixVersion string to search for (e.g. "4.16.1").
-        project: The Jira project key. Defaults to "ODF".
+        version: The ODF version (e.g. "4.17.2" or "odf-4.17.2").
+        project: The Jira project key. Defaults to "DFBUGS".
 
     Returns:
         JSON string with a list of matching issues, or an error message.
@@ -44,17 +52,26 @@ def jira_search(version: str, project: str = "ODF") -> str:
     if auth is None:
         return json.dumps({"error": "JIRA_EMAIL or JIRA_API_TOKEN not configured"})
 
-    jql = f'project = "{project}" AND fixVersion = "{version}" ORDER BY priority DESC'
-    url = f"{config.JIRA_URL.rstrip('/')}/rest/api/3/search"
-    params = {
+    fix_ver = _fix_version_name(version)
+    jql = (
+        f'project = "{project}" AND fixVersion = "{fix_ver}" '
+        f"ORDER BY priority DESC"
+    )
+    url = f"{config.JIRA_URL.rstrip('/')}/rest/api/3/search/jql"
+    payload = {
         "jql": jql,
         "maxResults": 200,
-        "fields": "summary,status,priority,components,labels,fixVersions,issuetype,assignee",
+        "fields": [
+            "summary", "status", "priority", "components",
+            "labels", "fixVersions", "issuetype", "assignee",
+        ],
     }
 
     try:
         with httpx.Client(timeout=30) as client:
-            resp = client.get(url, params=params, headers=_jira_headers(), auth=auth)
+            resp = client.post(
+                url, json=payload, headers=_jira_headers(), auth=auth
+            )
             resp.raise_for_status()
             data = resp.json()
 
@@ -81,7 +98,7 @@ def jira_search(version: str, project: str = "ODF") -> str:
 
         return json.dumps(
             {
-                "total": data.get("total", 0),
+                "total": data.get("total", 0) or len(issues),
                 "issues": issues,
             },
             indent=2,

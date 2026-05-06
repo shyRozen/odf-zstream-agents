@@ -40,7 +40,7 @@ def get(key: str, default=None):
 JIRA_URL = os.getenv("JIRA_URL", "")
 JIRA_EMAIL = os.getenv("JIRA_EMAIL", "")
 JIRA_API_TOKEN = os.getenv("JIRA_API_TOKEN", "")
-JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "ODF")
+JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "DFBUGS")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "red-hat-storage/ocs-ci")
