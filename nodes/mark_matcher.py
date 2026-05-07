@@ -141,6 +141,15 @@ def mark_matcher(state: MapState) -> dict:
     # Sort by score descending
     results.sort(key=lambda t: -t.relevance_score)
 
+    def _test_matches_component(test_path: str, comp: str) -> bool:
+        path_lower = test_path.lower()
+        if comp in path_lower:
+            return True
+        for d in component_mapping.get(comp, []):
+            if path_lower.startswith(d.rstrip("/")):
+                return True
+        return False
+
     # Dynamic threshold: drop tests scoring < 70% of the top score
     if results:
         top_score = results[0].relevance_score
@@ -152,12 +161,12 @@ def mark_matcher(state: MapState) -> dict:
         covered_components = set()
         for t in above_cutoff:
             for comp in changed_components:
-                if comp in t.file_path.lower() or comp in t.reason.lower():
+                if _test_matches_component(t.file_path, comp):
                     covered_components.add(comp)
 
         for comp in changed_components - covered_components:
             for t in below_cutoff:
-                if comp in t.file_path.lower() or comp in t.reason.lower():
+                if _test_matches_component(t.file_path, comp):
                     above_cutoff.append(t)
                     covered_components.add(comp)
                     logger.info(
@@ -171,20 +180,30 @@ def mark_matcher(state: MapState) -> dict:
         results = above_cutoff
 
     # Guarantee at least one test per changed component before capping
-    selected_set = set(t.test_node_id for t in results[: config.MAX_TESTS])
     top_results = results[: config.MAX_TESTS]
     overflow = results[config.MAX_TESTS :]
+
+    logger.info(
+        "Before force-include: %d in top, %d in overflow, components: %s",
+        len(top_results), len(overflow), changed_components,
+    )
 
     covered_in_top = set()
     for t in top_results:
         for comp in changed_components:
-            if comp in t.file_path.lower():
+            if _test_matches_component(t.file_path, comp):
                 covered_in_top.add(comp)
 
-    for comp in changed_components - covered_in_top:
+    missing = changed_components - covered_in_top
+    if missing:
+        logger.info("Components missing from top %d: %s", config.MAX_TESTS, missing)
+
+    for comp in missing:
+        found = False
         for t in overflow:
-            if comp in t.file_path.lower():
+            if _test_matches_component(t.file_path, comp):
                 top_results.append(t)
+                found = True
                 logger.info(
                     "Force-included test for '%s': %s (%.2f)",
                     comp,
@@ -192,6 +211,11 @@ def mark_matcher(state: MapState) -> dict:
                     t.relevance_score,
                 )
                 break
+        if not found:
+            logger.warning(
+                "No test found for component '%s' in overflow (%d tests)",
+                comp, len(overflow),
+            )
 
     results = top_results
 
