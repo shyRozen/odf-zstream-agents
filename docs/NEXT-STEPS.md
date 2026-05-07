@@ -1,7 +1,7 @@
 # ODF Z-Stream — Next Steps
 
 > Roadmap for taking the pipeline from working prototype to production.
-> Follows from ODF-ZStream-Multi-Agent-Plan-v2 and ODF-ZStream-Implementation-Notes.
+> Follows from  and .
 
 ---
 
@@ -235,3 +235,28 @@ LANGCHAIN_PROJECT=odf-zstream
 **First usable pipeline**: Steps 1-3 (~2-3 days)
 **Production-ready**: Steps 1-7 (~2 weeks)
 **Enterprise-grade**: All steps (~4 weeks)
+
+---
+
+## Step 10: Per-Version Test Indexing
+
+**Priority**: High (blocking accurate test selection)
+**Why**: Each ODF version (4.16, 4.17, ..., 4.21) has different tests on its release branch. The current index is built from one branch — test selection for older/newer versions may miss or include wrong tests.
+
+**ocs-ci release branches**: `upstream/release-4.10` through `upstream/release-4.21`
+
+**Plan**: Build a pure Python update script in the OCS-CI codebase map repo that:
+1. Clones/pulls ocs-ci
+2. Checks out each `release-X.Y` branch
+3. Runs AST scanner → produces `test-index-X.Y.json` per version
+4. Regenerates Obsidian notes if test directories changed
+5. Commits and pushes to map repo
+
+**Trigger options**:
+- GitHub Action on ocs-ci merge to `release-*` branch
+- Cron job (daily/weekly)
+- Manual: `python scripts/update_map.py --version 4.20`
+
+**No AI needed** — scanning is pure Python AST parsing. The scanner already exists at `tools/ocs_ci_scanner.py` in the zstream-agents repo.
+
+**Pipeline change**: `zstream run 4.20.5` should load `test-index-4.20.json` instead of `test-index.json`.
