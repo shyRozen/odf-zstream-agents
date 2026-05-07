@@ -44,6 +44,8 @@ JIRA_PROJECT_KEY = os.getenv("JIRA_PROJECT_KEY", "DFBUGS")
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "red-hat-storage/ocs-ci")
+GIT_AUTHOR_NAME = os.getenv("GIT_AUTHOR_NAME", "")
+GIT_AUTHOR_EMAIL = os.getenv("GIT_AUTHOR_EMAIL", "")
 
 JENKINS_URL = os.getenv("JENKINS_URL", "")
 JENKINS_USER = os.getenv("JENKINS_USER", "")

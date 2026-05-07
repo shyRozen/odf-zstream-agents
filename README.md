@@ -241,6 +241,8 @@ Nodes call `run_node(prompt, node_name)` -- the runner selects the runtime and m
 | `JENKINS_USER` | Yes | Jenkins username |
 | `JENKINS_API_TOKEN` | Yes | Jenkins API token |
 | `GITHUB_TOKEN` | Yes | GitHub PAT with repo write access |
+| `GIT_AUTHOR_NAME` | Yes | Name for Signed-off-by in PR commits (DCO requirement) |
+| `GIT_AUTHOR_EMAIL` | Yes | Email for Signed-off-by in PR commits |
 | `SLACK_WEBHOOK_URL` | No | Slack incoming webhook URL |
 | `POSTGRES_URL` | No | PostgreSQL connection string |
 | `OCS_CI_REPO_PATH` | No | Path to local ocs-ci repo (only for fallback index building) |

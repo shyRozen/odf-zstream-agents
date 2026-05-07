@@ -9,6 +9,14 @@ from langchain_core.tools import tool
 from core import config
 
 
+def _signed_msg(msg: str) -> str:
+    name = config.GIT_AUTHOR_NAME
+    email = config.GIT_AUTHOR_EMAIL
+    if name and email:
+        return f"{msg}\n\nSigned-off-by: {name} <{email}>"
+    return msg
+
+
 def _get_repo():
     """Get a PyGithub Repository object, or return an error string."""
     if not config.GITHUB_TOKEN:
@@ -187,7 +195,9 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
         new_content = "\n".join(modified_lines)
 
         # Commit the change
-        commit_message = f"Add @pytest.mark.{mark_name} to tests in {file_path}"
+        commit_message = _signed_msg(
+            f"Add @pytest.mark.{mark_name} to tests in {file_path}"
+        )
         result = repo.update_file(
             path=file_path,
             message=commit_message,
@@ -393,7 +403,9 @@ def github_register_marker(branch: str, mark_name: str, description: str) -> str
         new_content = "\n".join(new_lines)
         repo.update_file(
             path="pytest.ini",
-            message=f"Register @pytest.mark.{mark_name} in pytest.ini",
+            message=_signed_msg(
+                f"Register @pytest.mark.{mark_name} in pytest.ini"
+            ),
             content=new_content,
             sha=file_content.sha,
             branch=branch,
