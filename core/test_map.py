@@ -20,45 +20,36 @@ MAP_CACHE_DIR = Path.home() / ".cache" / "ocs-ci-codebase-map"
 
 
 def ensure_map(force_pull: bool = False, version: str | None = None) -> Path:
-    """Clone or pull the codebase map repo. Returns the local path.
+    """Download the map repo branch needed for this version.
 
-    Args:
-        force_pull: Always fetch latest from origin.
-        version: If given (e.g. "4.20.5" or "4.20"), checkout the
-                 matching release-X.Y branch for version-specific data.
+    Does a shallow single-branch clone every run. No cached state.
     """
-    if not MAP_CACHE_DIR.exists():
-        logger.info("Cloning codebase map from %s ...", MAP_REPO)
-        MAP_CACHE_DIR.parent.mkdir(parents=True, exist_ok=True)
+    branch = _version_branch(version) if version else "main"
+
+    if MAP_CACHE_DIR.exists():
+        import shutil
+        shutil.rmtree(MAP_CACHE_DIR)
+
+    MAP_CACHE_DIR.parent.mkdir(parents=True, exist_ok=True)
+    logger.info("Cloning map repo branch %s ...", branch)
+    r = subprocess.run(
+        ["git", "clone", "--depth", "1", "--branch", branch, MAP_REPO, str(MAP_CACHE_DIR)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if r.returncode != 0:
+        logger.warning("Branch %s not found, falling back to main", branch)
         subprocess.run(
-            ["git", "clone", MAP_REPO, str(MAP_CACHE_DIR)],
+            ["git", "clone", "--depth", "1", "--branch", "main", MAP_REPO, str(MAP_CACHE_DIR)],
             capture_output=True,
             timeout=60,
         )
 
-    if force_pull:
-        logger.info("Fetching latest codebase map...")
-        subprocess.run(
-            ["git", "fetch", "origin"],
-            cwd=MAP_CACHE_DIR,
-            capture_output=True,
-            timeout=30,
-        )
-
-    if version:
-        branch = _version_branch(version)
-        if branch:
-            _checkout_branch(branch)
-
     return MAP_CACHE_DIR
 
 
-def _version_branch(version: str) -> str | None:
-    """Extract release branch name from version string.
-
-    "4.20.5" -> "release-4.20"
-    "4.20"   -> "release-4.20"
-    """
+def _version_branch(version: str) -> str:
     parts = version.split(".")
     if len(parts) >= 2:
         try:
@@ -66,33 +57,8 @@ def _version_branch(version: str) -> str | None:
             int(parts[1])
             return f"release-{parts[0]}.{parts[1]}"
         except ValueError:
-            return None
-    return None
-
-
-def _checkout_branch(branch: str):
-    """Checkout a branch in the cached map repo."""
-    r = subprocess.run(
-        ["git", "checkout", branch],
-        cwd=MAP_CACHE_DIR,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    if r.returncode == 0:
-        logger.info("Map repo: checked out %s", branch)
-    else:
-        r2 = subprocess.run(
-            ["git", "checkout", f"origin/{branch}"],
-            cwd=MAP_CACHE_DIR,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if r2.returncode == 0:
-            logger.info("Map repo: checked out origin/%s", branch)
-        else:
-            logger.warning("Map repo: branch %s not found, staying on current", branch)
+            pass
+    return "main"
 
 
 def _parse_frontmatter(path: Path) -> dict:
