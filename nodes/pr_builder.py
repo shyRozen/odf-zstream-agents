@@ -54,7 +54,8 @@ def pr_builder(state: PipelineState) -> dict:
         }
 
     mark_name = f"zstream_{version.replace('.', '_').replace('-', '_')}"
-    branch_name = f"zstream/{version}/test-enablement"
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    branch_name = f"zstream/{version}/test-enablement-{timestamp}"
     parts = version.split(".")
     base_branch = f"release-{parts[0]}.{parts[1]}" if len(parts) >= 2 else "master"
 
