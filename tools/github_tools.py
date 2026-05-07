@@ -354,6 +354,57 @@ def github_get_pr_files(pr_url: str) -> str:
         return json.dumps({"error": f"Failed to fetch PR {pr_url}: {str(exc)}"})
 
 
+def github_register_marker(branch: str, mark_name: str, description: str) -> str:
+    """Register a pytest marker in pytest.ini on the given branch.
+
+    Appends the marker to the markers list in pytest.ini.
+
+    Args:
+        branch: The branch to modify.
+        mark_name: The marker name (e.g. "zstream_4_20_5").
+        description: Description for the marker.
+
+    Returns:
+        JSON string with result or error.
+    """
+    repo, error = _get_repo()
+    if error:
+        return error
+
+    try:
+        file_content = repo.get_contents("pytest.ini", ref=branch)
+        content = file_content.decoded_content.decode("utf-8")
+
+        if mark_name in content:
+            return json.dumps({"message": f"Marker '{mark_name}' already registered"})
+
+        lines = content.split("\n")
+        new_lines = []
+        inserted = False
+        for line in lines:
+            new_lines.append(line)
+            if not inserted and line.strip().startswith("markers"):
+                new_lines.append(f"    {mark_name}: {description}")
+                inserted = True
+
+        if not inserted:
+            return json.dumps({"error": "Could not find markers section in pytest.ini"})
+
+        new_content = "\n".join(new_lines)
+        repo.update_file(
+            path="pytest.ini",
+            message=f"Register @pytest.mark.{mark_name} in pytest.ini",
+            content=new_content,
+            sha=file_content.sha,
+            branch=branch,
+        )
+
+        return json.dumps({"message": f"Marker '{mark_name}' registered in pytest.ini"})
+
+    except Exception as exc:
+        return json.dumps({"error": f"Failed to register marker: {str(exc)}"})
+
+
 # Tool-wrapped versions for LangGraph ReAct agents
 github_create_branch_tool = tool(github_create_branch)
 github_add_mark_to_test_tool = tool(github_add_mark_to_test)
