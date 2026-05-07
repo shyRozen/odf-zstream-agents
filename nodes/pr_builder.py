@@ -54,12 +54,14 @@ def pr_builder(state: PipelineState) -> dict:
 
     mark_name = f"zstream_{version.replace('.', '_').replace('-', '_')}"
     branch_name = f"zstream/{version}/test-enablement"
+    parts = version.split(".")
+    base_branch = f"release-{parts[0]}.{parts[1]}" if len(parts) >= 2 else "master"
 
     try:
-        # Step 1: Create a new branch
-        logger.info("Creating branch: %s", branch_name)
+        # Step 1: Create a new branch from the release branch
+        logger.info("Creating branch: %s (from %s)", branch_name, base_branch)
         try:
-            github_create_branch(branch_name)
+            github_create_branch(branch_name, base_branch=base_branch)
         except Exception as e:
             logger.warning("Branch creation failed (may already exist): %s", e)
 
@@ -104,6 +106,7 @@ def pr_builder(state: PipelineState) -> dict:
             branch=branch_name,
             title=pr_title,
             body=pr_body,
+            base_branch=base_branch,
         )
 
         pr_url = ""

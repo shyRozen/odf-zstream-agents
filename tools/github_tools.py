@@ -31,7 +31,7 @@ def github_create_branch(branch_name: str, base_branch: str = "master") -> str:
 
     Args:
         branch_name: Name for the new branch (e.g. "zstream/4.16.1-marks").
-        base_branch: The branch to base the new branch on. Defaults to "master".
+        base_branch: The branch to base the new branch on (e.g. "release-4.20").
 
     Returns:
         JSON string with the branch name and SHA, or an error message.
@@ -212,15 +212,14 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
         return json.dumps({"error": f"Failed to add marks: {str(exc)}"})
 
 
-def github_create_pr(branch: str, title: str, body: str) -> str:
+def github_create_pr(branch: str, title: str, body: str, base_branch: str = "master") -> str:
     """Create a pull request in the ocs-ci repository.
-
-    Creates a PR from the specified branch targeting master.
 
     Args:
         branch: The source branch for the PR.
         title: The PR title.
         body: The PR description body (supports Markdown).
+        base_branch: Target branch for the PR (e.g. "release-4.20").
 
     Returns:
         JSON string with the PR number, URL, and title, or an error message.
@@ -234,7 +233,7 @@ def github_create_pr(branch: str, title: str, body: str) -> str:
             title=title,
             body=body,
             head=branch,
-            base="master",
+            base=base_branch,
         )
 
         return json.dumps(
