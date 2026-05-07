@@ -275,18 +275,21 @@ def build_index(force: bool = False) -> Path:
     return INDEX_PATH
 
 
-def load_index() -> dict:
+def load_index(version: str | None = None) -> dict:
     """Load the test index from the codebase map repo.
 
-    The index lives in the map repo at test-index.json. Falls back to
-    local cache if the map repo isn't available.
+    Args:
+        version: Z-stream version (e.g., "4.20.5") or release version
+                 (e.g., "4.20"). The map repo's matching release-X.Y
+                 branch is checked out to load version-specific data.
     """
     from core.test_map import ensure_map
 
-    map_dir = ensure_map()
+    map_dir = ensure_map(version=version)
     map_index = map_dir / "test-index.json"
 
     if map_index.exists():
+        logger.info("Loading test index from %s", map_index)
         with open(map_index) as f:
             return json.load(f)
 

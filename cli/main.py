@@ -85,7 +85,7 @@ def run(
     from core.test_map import ensure_map
 
     typer.echo("Downloading codebase map...")
-    map_path = ensure_map(force_pull=True)
+    map_path = ensure_map(force_pull=True, version=zstream)
     typer.echo(f"  Map loaded: {map_path}")
 
     initial_state: PipelineState = {

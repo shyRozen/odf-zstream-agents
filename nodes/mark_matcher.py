@@ -29,11 +29,12 @@ def mark_matcher(state: MapState) -> dict:
         logger.warning("No search areas provided, nothing to match")
         return {"scored_tests": []}
 
-    # Load the pre-built test index
+    # Load the pre-built test index (version-specific if available)
     try:
         from tools.ocs_ci_scanner import load_index
 
-        index = load_index()
+        version = state.get("version", "")
+        index = load_index(version=version or None)
     except Exception as e:
         logger.error("Failed to load test index: %s", e)
         return {"scored_tests": []}

@@ -76,6 +76,7 @@ def map_tests_wrapper(state: PipelineState) -> dict:
     if "change_manifest" in state:
         sub_state["change_manifest"] = state["change_manifest"]
     sub_state["test_map_context"] = get_map_summary()
+    sub_state["version"] = state.get("zstream_version", "")
     result = _get_map_tests_graph().invoke(sub_state)
     output: dict = {"current_stage": "map_tests"}
     if result.get("selected_tests"):

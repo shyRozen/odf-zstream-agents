@@ -46,6 +46,7 @@ class InspectState(TypedDict, total=False):
 
 
 class MapState(TypedDict, total=False):
+    version: str
     change_manifest: ChangeManifest
     test_map_context: str
     search_areas: list[str]
