@@ -246,6 +246,11 @@ def github_create_pr(branch: str, title: str, body: str, base_branch: str = "mas
             base=base_branch,
         )
 
+        try:
+            pr.add_to_labels("Automatic AI Generated")
+        except Exception:
+            pass
+
         return json.dumps(
             {
                 "pr_number": pr.number,
