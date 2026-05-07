@@ -143,12 +143,10 @@ def mark_matcher(state: MapState) -> dict:
 
     def _test_matches_component(test_path: str, comp: str) -> bool:
         path_lower = test_path.lower()
-        if comp in path_lower:
-            return True
-        for d in component_mapping.get(comp, []):
-            if path_lower.startswith(d.rstrip("/")):
-                return True
-        return False
+        dirs = component_mapping.get(comp, [])
+        if dirs:
+            return any(path_lower.startswith(d.rstrip("/")) for d in dirs)
+        return comp in path_lower
 
     # Dynamic threshold: drop tests scoring < 70% of the top score
     if results:
