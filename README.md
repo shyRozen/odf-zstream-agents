@@ -1,6 +1,6 @@
 # ODF Z-Stream Multi-Agent Test Automation
 
-AI-powered pipeline that automates the z-stream test lifecycle for **OpenShift Data Foundation (ODF)**. Inspects what went into a z-stream release (Jira bugs + GitHub PRs), selects individual test functions from the ocs-ci framework using a pre-built test index, creates a PR with temporary marks, triggers Jenkins runs, and analyzes results.
+AI-powered pipeline that automates the z-stream test lifecycle for **OpenShift Data Foundation (ODF)**. Inspects what went into a z-stream release (Jira bugs + GitHub PRs), selects individual test functions from the ocs-ci framework using per-version test indexes, creates a PR with temporary marks, triggers Jenkins runs, and analyzes results.
 
 ## Architecture
 
@@ -58,8 +58,11 @@ cp .env.example .env
 # Full pipeline
 zstream run 4.16.2
 
-# Collect-only (inspect + map, show selected tests with scores, don't execute)
+# Collect-only (inspect + map, show selected tests with scores)
 zstream run 4.16.2 --collect-only
+
+# Stop after PR is created (skip Jenkins + analysis)
+zstream run 4.16.2 --stop-after-pr
 
 # Override max tests (default 50)
 zstream run 4.16.2 --max-tests 30
@@ -79,7 +82,7 @@ docker compose up -d
 | Stage | Pattern | Nodes | What it Does |
 |-------|---------|-------|-------------|
 | **1. Inspect** | Fan-out → Fan-in | 4 | Query Jira (+ PR URLs from remote links), fetch PR changed files from GitHub, merge into Change Manifest. Errata disabled |
-| **2. Map Tests** | Sequential + retry | 3 | Map changes to individual test functions (from pre-built index of 532 files / 1058 tests), score relevance using PR file paths + components + keywords, validate coverage |
+| **2. Map Tests** | Sequential + retry | 3 | Map changes to individual test functions using per-version test index (downloaded from [ocs-ci-codebase-map](https://github.com/shyRozen/ocs-ci-codebase-map) `release-X.Y` branch), score relevance using PR file paths + components + keywords, validate coverage |
 | **3. PR Builder** | Single node | 1 | Create branch, add `@pytest.mark.zstream_{ver}` to tests, open PR |
 | **4. Jenkins** | Single node + poll | 1 | Trigger `qe-deploy-ocs-cluster-prod`, poll until complete, fetch results |
 | **5. Analyze** | DAG | 4 | Classify pass/fail, root cause failures, detect regressions, generate report |
@@ -163,7 +166,7 @@ odf-zstream-agents/
 │   ├── errata_tools.py          # errata_fetch, errata_parse
 │   ├── git_tools.py             # git_diff_files, git_log_between, git_show_commit
 │   ├── ocs_ci_tools.py          # list_tests, read_test_marks, squad_map_lookup, read_test_source
-│   ├── ocs_ci_scanner.py        # Builds test index (532 files, 1058 tests) for per-testcase selection
+│   ├── ocs_ci_scanner.py        # Loads per-version test index from map repo for per-testcase selection
 │   ├── github_tools.py          # github_create_branch, github_add_mark_to_test, github_create_pr, ...
 │   ├── jenkins_tools.py         # jenkins_trigger_build, jenkins_get_build_status, ...
 │   ├── slack_tools.py           # slack_post_message
@@ -240,7 +243,7 @@ Nodes call `run_node(prompt, node_name)` -- the runner selects the runtime and m
 | `GITHUB_TOKEN` | Yes | GitHub PAT with repo write access |
 | `SLACK_WEBHOOK_URL` | No | Slack incoming webhook URL |
 | `POSTGRES_URL` | No | PostgreSQL connection string |
-| `OCS_CI_REPO_PATH` | No | Path to local ocs-ci repo (default: `~/codcod/new-ocs-ci/ocs-ci`) |
+| `OCS_CI_REPO_PATH` | No | Path to local ocs-ci repo (only for fallback index building) |
 
 ## Tech Stack
 

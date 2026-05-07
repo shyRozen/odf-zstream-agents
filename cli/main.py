@@ -4,6 +4,7 @@ Usage::
 
     zstream run 4.16.2
     zstream run 4.16.2 --collect-only
+    zstream run 4.16.2 --stop-after-pr
     zstream status
 """
 
@@ -62,6 +63,11 @@ def run(
         help="Run inspect + map stages only — show selected tests without "
         "creating a PR or triggering Jenkins",
     ),
+    stop_after_pr: bool = typer.Option(
+        False,
+        "--stop-after-pr",
+        help="Run through PR creation then stop — skip Jenkins and analysis",
+    ),
     max_tests: int = typer.Option(
         0,
         "--max-tests",
@@ -77,7 +83,7 @@ def run(
 
         cfg.MAX_TESTS = max_tests
 
-    mode = "collect-only" if collect_only else "full"
+    mode = "collect-only" if collect_only else "stop-after-pr" if stop_after_pr else "full"
     typer.echo(f"ODF z-stream pipeline ({mode}): {previous} -> {zstream}")
     typer.echo("=" * 50)
 
@@ -103,14 +109,20 @@ def run(
     from graph.pipeline import build_pipeline
 
     typer.echo("Building pipeline graph...")
-    pipeline = build_pipeline(collect_only=collect_only)
+    pipeline = build_pipeline(collect_only=collect_only, stop_after_pr=stop_after_pr)
 
     typer.echo("Invoking pipeline...\n")
     final_state = pipeline.invoke(initial_state)
 
     # ── Summary ──────────────────────────────────────────────────────
     typer.echo("\n" + "=" * 50)
-    typer.echo("Pipeline complete!" if not collect_only else "Collection complete!")
+    if collect_only:
+        label = "Collection complete!"
+    elif stop_after_pr:
+        label = "PR stage complete!"
+    else:
+        label = "Pipeline complete!"
+    typer.echo(label)
     typer.echo("=" * 50)
 
     manifest = final_state.get("change_manifest")
@@ -144,7 +156,11 @@ def run(
             for gap in coverage.gap_details:
                 typer.echo(f"    - [{gap.component}] {gap.reason}")
 
-    if collect_only:
+    if collect_only or stop_after_pr:
+        if stop_after_pr:
+            pr_url = final_state.get("pr_url")
+            if pr_url:
+                typer.echo(f"\n  PR: {pr_url}")
         errors = final_state.get("errors") or []
         if errors:
             typer.echo(f"\n  Errors ({len(errors)}):")

@@ -132,19 +132,17 @@ def notify_node(state: PipelineState) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def build_pipeline(collect_only: bool = False):
+def build_pipeline(collect_only: bool = False, stop_after_pr: bool = False):
     """Build and compile the z-stream pipeline.
 
     Args:
-        collect_only: If True, build a pipeline that stops after
-            inspect + map_tests (stages 1-2).  Useful for previewing
-            which tests would be selected without triggering PR/Jenkins.
+        collect_only: Stop after inspect + map_tests (stages 1-2).
+        stop_after_pr: Stop after PR is created (stages 1-3).
 
     Returns the compiled LangGraph runnable.
     """
     graph = StateGraph(PipelineState)
 
-    # Sub-graph wrappers
     graph.add_node("inspect", inspect_wrapper)
     graph.add_node("map_tests", map_tests_wrapper)
 
@@ -153,6 +151,10 @@ def build_pipeline(collect_only: bool = False):
 
     if collect_only:
         graph.add_edge("map_tests", END)
+    elif stop_after_pr:
+        graph.add_node("pr_builder", pr_builder_node)
+        graph.add_edge("map_tests", "pr_builder")
+        graph.add_edge("pr_builder", END)
     else:
         graph.add_node("analyze", analyze_wrapper)
         graph.add_node("pr_builder", pr_builder_node)
