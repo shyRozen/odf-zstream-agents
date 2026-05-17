@@ -80,124 +80,126 @@ def github_create_branch(branch_name: str, base_branch: str = "master") -> str:
 
 
 def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
-    """Add a pytest mark decorator to test functions in a file on a branch.
+    """Add a pytest mark to test classes/functions in a file.
 
-    Reads the specified test file from the branch, adds @pytest.mark.{mark_name}
-    before each test function that doesn't already have it, and commits the change.
-
-    Args:
-        branch: The branch to modify (e.g. "zstream/4.16.1-marks").
-        file_path: Path to the test file relative to the repo root
-                   (e.g. "tests/functional/pv/test_pvc_creation.py").
-        mark_name: The pytest mark name to add (e.g. "zstream_4_16_1").
-
-    Returns:
-        JSON string with the commit SHA and modified file info, or an error.
+    Follows ocs-ci conventions:
+    - Adds import from marks.py (not raw @pytest.mark)
+    - Applies @mark_name at class level if class exists, else per function
     """
     repo, error = _get_repo()
     if error:
         return error
 
     try:
-        # Get the current file content from the branch
         try:
             file_content = repo.get_contents(file_path, ref=branch)
         except Exception:
             return json.dumps(
-                {
-                    "error": f"File '{file_path}' not found on branch '{branch}'",
-                }
+                {"error": f"File '{file_path}' not found on branch '{branch}'"}
             )
 
         content = file_content.decoded_content.decode("utf-8")
+        if mark_name in content:
+            return json.dumps(
+                {"message": f"Mark '{mark_name}' already present", "file": file_path}
+            )
+
         lines = content.split("\n")
 
-        mark_decorator = f"@pytest.mark.{mark_name}"
-
-        # Check if pytest import exists, add if needed
-        has_pytest_import = any("import pytest" in line for line in lines)
-
+        # Step 1: Add import — append to existing marks import or add new one
+        marks_import = "ocs_ci.framework.pytest_customization.marks"
+        import_added = False
         new_lines = []
-        if not has_pytest_import:
-            # Insert import after the last import line
-            import_inserted = False
-            for line in lines:
+        in_marks_import = False
+        for line in lines:
+            if not import_added and marks_import in line and "import" in line:
+                in_marks_import = True
                 new_lines.append(line)
-                if not import_inserted and (line.startswith("import ") or line.startswith("from ")):
-                    # Keep going to find the last import
-                    pass
-            # Simpler: just add at the top after existing imports
-            new_lines = []
-            inserted = False
-            past_imports = False
-            for line in lines:
-                if not past_imports and not inserted:
-                    if (
-                        line.strip()
-                        and not line.startswith("import ")
-                        and not line.startswith("from ")
-                        and not line.startswith("#")
-                        and not line.startswith('"""')
-                        and not line.startswith("'''")
-                        and line.strip() != ""
-                    ):
-                        # We're past the import block
-                        if not any("import pytest" in line for line in new_lines):
-                            new_lines.append("import pytest")
-                            new_lines.append("")
-                            inserted = True
-                        past_imports = True
-                new_lines.append(line)
-            if not inserted and not has_pytest_import:
-                new_lines.insert(0, "import pytest")
-            lines = new_lines
+                # Single-line import (no parenthesis)
+                if "(" not in line:
+                    new_lines[-1] = f"{line.rstrip()}, {mark_name}"
+                    import_added = True
+                    in_marks_import = False
+                continue
+            if in_marks_import:
+                if line.strip() == ")":
+                    new_lines.append(f"    {mark_name},")
+                    new_lines.append(line)
+                    import_added = True
+                    in_marks_import = False
+                    continue
+            new_lines.append(line)
 
-        # Add the mark to test functions that don't have it
+        if not import_added:
+            insert_idx = 0
+            for i, line in enumerate(new_lines):
+                if line.startswith("import ") or line.startswith("from "):
+                    insert_idx = i + 1
+                    while insert_idx < len(new_lines) and (
+                        new_lines[insert_idx].startswith("    ")
+                        or new_lines[insert_idx].strip() == ")"
+                    ):
+                        insert_idx += 1
+            new_lines.insert(
+                insert_idx,
+                f"from {marks_import} import {mark_name}",
+            )
+
+        lines = new_lines
+
+        # Step 2: Add @mark_name decorator at class or function level
         modified_lines = []
         marks_added = 0
-        i = 0
-        while i < len(lines):
-            line = lines[i]
+        classes_marked = set()
 
-            # Detect test function definitions
+        for i, line in enumerate(lines):
             stripped = line.lstrip()
-            if stripped.startswith("def test_") or stripped.startswith("async def test_"):
-                # Check if the mark is already present in preceding decorators
-                has_mark = False
-                j = i - 1
-                while j >= 0 and (lines[j].lstrip().startswith("@") or lines[j].strip() == ""):
-                    if mark_name in lines[j]:
-                        has_mark = True
-                        break
-                    j -= 1
+            indent = len(line) - len(stripped)
 
-                if not has_mark:
-                    indent = len(line) - len(stripped)
-                    modified_lines.append(" " * indent + mark_decorator)
+            # Mark at class level (top-level classes containing test methods)
+            if stripped.startswith("class ") and indent == 0:
+                has_test_methods = any(
+                    l.lstrip().startswith("def test_")
+                    for l in lines[i + 1 : min(i + 200, len(lines))]
+                    if l.startswith("    ")
+                )
+                if has_test_methods:
+                    already = any(
+                        mark_name in lines[j]
+                        for j in range(max(0, i - 5), i)
+                        if lines[j].lstrip().startswith("@")
+                    )
+                    if not already:
+                        modified_lines.append(f"@{mark_name}")
+                        marks_added += 1
+                        classes_marked.add(i)
+
+            # Mark standalone test functions (not in a class)
+            elif (
+                stripped.startswith("def test_")
+                and indent == 0
+            ):
+                already = any(
+                    mark_name in lines[j]
+                    for j in range(max(0, i - 5), i)
+                    if lines[j].lstrip().startswith("@")
+                )
+                if not already:
+                    modified_lines.append(f"@{mark_name}")
                     marks_added += 1
 
             modified_lines.append(line)
-            i += 1
 
         if marks_added == 0:
             return json.dumps(
                 {
-                    "message": (
-                        f"No modifications needed - mark "
-                        f"'{mark_name}' already present "
-                        f"or no test functions found"
-                    ),
+                    "message": f"No test classes/functions found in {file_path}",
                     "file": file_path,
-                    "branch": branch,
                 }
             )
 
         new_content = "\n".join(modified_lines)
-
-        # Commit the change
-        commit_message = _signed_msg(
-            f"Add @pytest.mark.{mark_name} to tests in {file_path}"
-        )
+        commit_message = _signed_msg(f"Add @{mark_name} to {file_path}")
         result = repo.update_file(
             path=file_path,
             message=commit_message,
@@ -213,7 +215,6 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
                 "marks_added": marks_added,
                 "mark_name": mark_name,
                 "commit_sha": result["commit"].sha,
-                "message": f"Added {mark_decorator} to {marks_added} test(s)",
             },
             indent=2,
         )
@@ -420,6 +421,49 @@ def github_register_marker(branch: str, mark_name: str, description: str) -> str
 
     except Exception as exc:
         return json.dumps({"error": f"Failed to register marker: {str(exc)}"})
+
+
+def github_register_mark_in_marks_py(branch: str, mark_name: str) -> str:
+    """Add a marker variable to marks.py on the given branch.
+
+    Appends e.g. `zstream_4_16_13 = pytest.mark.zstream_4_16_13`
+    so test files can import it.
+    """
+    repo, error = _get_repo()
+    if error:
+        return error
+
+    marks_path = "ocs_ci/framework/pytest_customization/marks.py"
+    try:
+        file_content = repo.get_contents(marks_path, ref=branch)
+        content = file_content.decoded_content.decode("utf-8")
+
+        if f"{mark_name} = " in content:
+            return json.dumps(
+                {"message": f"Mark '{mark_name}' already in marks.py"}
+            )
+
+        new_line = f"\n# z-stream marker\n{mark_name} = pytest.mark.{mark_name}\n"
+        new_content = content.rstrip() + new_line
+
+        repo.update_file(
+            path=marks_path,
+            message=_signed_msg(
+                f"Add {mark_name} to marks.py"
+            ),
+            content=new_content,
+            sha=file_content.sha,
+            branch=branch,
+        )
+
+        return json.dumps(
+            {"message": f"Mark '{mark_name}' added to marks.py"}
+        )
+
+    except Exception as exc:
+        return json.dumps(
+            {"error": f"Failed to update marks.py: {str(exc)}"}
+        )
 
 
 # Tool-wrapped versions for LangGraph ReAct agents

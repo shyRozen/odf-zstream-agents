@@ -37,6 +37,7 @@ def pr_builder(state: PipelineState) -> dict:
             github_add_mark_to_test,
             github_create_pr,
             github_register_marker,
+            github_register_mark_in_marks_py,
         )
     except ImportError:
         logger.warning("github_tools not available, skipping PR creation")
@@ -67,7 +68,7 @@ def pr_builder(state: PipelineState) -> dict:
         except Exception as e:
             logger.warning("Branch creation failed (may already exist): %s", e)
 
-        # Step 2: Register the marker in pytest.ini
+        # Step 2: Register the marker in pytest.ini and marks.py
         logger.info("Registering marker: %s", mark_name)
         try:
             github_register_marker(
@@ -78,7 +79,15 @@ def pr_builder(state: PipelineState) -> dict:
         except Exception as e:
             logger.warning("Failed to register marker in pytest.ini: %s", e)
 
-        # Step 3: Add pytest marks to each selected test
+        try:
+            github_register_mark_in_marks_py(
+                branch=branch_name,
+                mark_name=mark_name,
+            )
+        except Exception as e:
+            logger.warning("Failed to register marker in marks.py: %s", e)
+
+        # Step 3: Add marks to each selected test
         marked_count = 0
         mark_errors = []
         for test in selected_tests:
