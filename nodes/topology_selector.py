@@ -1,14 +1,15 @@
 """Topology Selector node -- classifies fixes by required cluster topology.
 
-Uses AI to analyze fix descriptions and determine which Jenkins deployment
-configurations are needed. Outputs deployment specs that would be sent
-to the Jenkins API.
+Parses Jira bug descriptions to extract platform and deployment type
+from the standard DFBUGS template, then uses AI to map each fix to
+the Jenkins deployment configuration needed.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 
 from core.agent_runner import run_node
@@ -22,42 +23,64 @@ TOPOLOGY_CONFIGS = {
         "description": "Standard IPI cluster (AWS)",
         "job_name": "qe-deploy-ocs-cluster-prod",
         "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml",
-        "typical_fixes": "RBD, CephFS, PVC, snapshot, clone, CSI, MCG, NooBaa, "
-        "bucket, S3, OBC, OCS Operator, upgrade, deployment, monitoring",
     },
     "regional_dr": {
         "description": "Regional DR multi-cluster pair",
         "job_name": "qe-deploy-ocs-cluster-multi-prod",
         "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml",
-        "typical_fixes": "Regional DR, RDR, ramen, failover, relocate, "
-        "replication, multicluster",
     },
     "metro_dr": {
         "description": "Metro DR stretched cluster with arbiter",
         "job_name": "qe-deploy-ocs-cluster-prod",
         "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml",
-        "typical_fixes": "Metro DR, MDR, stretch, arbiter, netsplit",
     },
     "provider_client": {
         "description": "Provider-Client managed service pair",
         "job_name": "qe-deploy-ocs-cluster-multi-prod",
         "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml",
-        "typical_fixes": "Provider, consumer, managed service, ROSA, HCI, "
-        "provider-client, storageclient",
     },
     "external_mode": {
         "description": "External Ceph + ODF cluster",
         "job_name": "qe-deploy-ocs-cluster-prod",
         "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml",
-        "typical_fixes": "External Ceph, external mode, RHCS, "
-        "external cluster",
     },
     "lso_baremetal": {
         "description": "LSO / Baremetal deployment",
         "job_name": "qe-deploy-ocs-cluster-prod",
         "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_lso_3m_3w.yaml",
-        "typical_fixes": "LSO, local storage, baremetal, NVMe",
     },
+}
+
+# Maps parsed Jira values to topology keys
+PLATFORM_MAP = {
+    "aws": "aws",
+    "azure": "azure",
+    "gcp": "gcp",
+    "vsphere": "vsphere",
+    "vmware": "vsphere",
+    "bare metal": "baremetal",
+    "baremetal": "baremetal",
+    "ibm": "ibm",
+    "rosa": "rosa",
+    "all platforms": "all",
+    "platform agnostic": "all",
+}
+
+DEPLOYMENT_TYPE_MAP = {
+    "internal": "standard_ipi",
+    "internal-attached": "lso_baremetal",
+    "lso": "lso_baremetal",
+    "external": "external_mode",
+    "external mode": "external_mode",
+    "multicluster": "standard_ipi",
+    "provider": "provider_client",
+    "provider-client": "provider_client",
+    "consumer": "provider_client",
+    "dr": "regional_dr",
+    "regional dr": "regional_dr",
+    "metro dr": "metro_dr",
+    "stretch": "metro_dr",
+    "arbiter": "metro_dr",
 }
 
 
@@ -75,14 +98,19 @@ def topology_selector(state: PipelineState) -> dict:
     ocs_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else version
     mark_name = f"zstream_{version.replace('.', '_').replace('-', '_')}"
 
-    # Use AI to classify each fix by topology
-    classifications = _classify_with_ai(manifest, version)
+    # Step 1: Fetch Jira descriptions and parse platform/deployment info
+    fix_details = _fetch_jira_details(manifest)
 
-    # If AI fails, fall back to heuristic
+    # Step 2: Print what we found in Jira
+    _print_jira_analysis(fix_details)
+
+    # Step 3: AI classification using parsed Jira data
+    classifications = _classify_with_ai(manifest, version, fix_details)
+
     if not classifications:
-        classifications = _classify_heuristic(manifest)
+        classifications = _classify_from_jira(fix_details, manifest)
 
-    # Group fixes by topology
+    # Group by topology
     topology_groups: dict[str, list[str]] = {}
     for fix_id, topology in classifications.items():
         topology_groups.setdefault(topology, []).append(fix_id)
@@ -91,11 +119,7 @@ def topology_selector(state: PipelineState) -> dict:
     specs = []
     for topology, fix_ids in topology_groups.items():
         config = TOPOLOGY_CONFIGS.get(topology, TOPOLOGY_CONFIGS["standard_ipi"])
-
-        # Collect test paths for this topology's fixes
-        topology_tests = _tests_for_fixes(
-            fix_ids, manifest, selected_tests
-        )
+        topology_tests = _tests_for_fixes(fix_ids, manifest, selected_tests)
 
         spec = {
             "topology": topology,
@@ -121,33 +145,145 @@ def topology_selector(state: PipelineState) -> dict:
         }
         specs.append(spec)
 
-    # Print what would be sent
     _print_deployment_plan(specs, version)
-
     return {"deployment_specs": specs}
 
 
-def _classify_with_ai(manifest: ChangeManifest, version: str) -> dict[str, str]:
-    """Use AI to classify each fix by required topology."""
-    topology_descriptions = "\n".join(
-        f"- {name}: {cfg['description']} (keywords: {cfg['typical_fixes']})"
+# ---------------------------------------------------------------------------
+# Jira description parsing
+# ---------------------------------------------------------------------------
+
+
+def _fetch_jira_details(manifest: ChangeManifest) -> dict[str, dict]:
+    """Fetch full Jira descriptions and parse platform/deployment info."""
+    try:
+        from tools.jira_tools import jira_get_issue
+    except ImportError:
+        logger.warning("jira_tools not available")
+        return {}
+
+    details = {}
+    for change in manifest.changes:
+        if not change.id.startswith("DFBUGS"):
+            continue
+        try:
+            raw = json.loads(jira_get_issue(change.id))
+            desc = raw.get("description", "")
+            platform_info = _parse_platform(desc)
+            deploy_info = _parse_deployment_type(desc)
+            details[change.id] = {
+                "summary": change.summary,
+                "component": change.component,
+                "platform_raw": platform_info["raw"],
+                "platform_parsed": platform_info["parsed"],
+                "deployment_raw": deploy_info["raw"],
+                "deployment_parsed": deploy_info["parsed"],
+                "topology_hint": deploy_info["topology"],
+            }
+        except Exception as e:
+            logger.warning("Failed to fetch %s: %s", change.id, e)
+
+    return details
+
+
+def _parse_platform(description: str) -> dict:
+    """Extract platform from the DFBUGS template question."""
+    pattern = (
+        r"(?:The OCP platform infrastructure and deployment type|"
+        r"platform.*infrastructure.*deployment)"
+        r"[^:]*:\s*\n(.*?)(?:\n\s*\n|\nThe ODF|\nThe version|\nDoes this)"
+    )
+    match = re.search(pattern, description, re.IGNORECASE | re.DOTALL)
+    raw = match.group(1).strip() if match else ""
+
+    parsed = "unknown"
+    if raw:
+        raw_lower = raw.lower()
+        for keyword, platform in PLATFORM_MAP.items():
+            if keyword in raw_lower:
+                parsed = platform
+                break
+
+    install_type = "unknown"
+    if raw:
+        raw_lower = raw.lower()
+        if "ipi" in raw_lower:
+            install_type = "ipi"
+        elif "upi" in raw_lower:
+            install_type = "upi"
+        elif "all" in raw_lower or "agnostic" in raw_lower:
+            install_type = "any"
+
+    return {"raw": raw, "parsed": parsed, "install_type": install_type}
+
+
+def _parse_deployment_type(description: str) -> dict:
+    """Extract ODF deployment type from the DFBUGS template question."""
+    pattern = (
+        r"(?:The ODF deployment type|"
+        r"ODF.*deployment.*type)"
+        r"[^:]*:\s*\n(.*?)(?:\n\s*\n|\nThe version|\nDoes this)"
+    )
+    match = re.search(pattern, description, re.IGNORECASE | re.DOTALL)
+    raw = match.group(1).strip() if match else ""
+
+    topology = "standard_ipi"
+    parsed = "unknown"
+    if raw:
+        raw_lower = raw.lower()
+        for keyword, topo in DEPLOYMENT_TYPE_MAP.items():
+            if keyword in raw_lower:
+                topology = topo
+                parsed = keyword
+                break
+
+    return {"raw": raw, "parsed": parsed, "topology": topology}
+
+
+# ---------------------------------------------------------------------------
+# Classification
+# ---------------------------------------------------------------------------
+
+
+def _classify_with_ai(
+    manifest: ChangeManifest, version: str, fix_details: dict
+) -> dict[str, str]:
+    """Use AI to classify with real Jira platform/deployment data."""
+    if not fix_details:
+        return {}
+
+    topology_list = "\n".join(
+        f"- {name}: {cfg['description']}"
         for name, cfg in TOPOLOGY_CONFIGS.items()
     )
 
-    changes_text = "\n".join(
-        f"- {c.id} [{c.component}]: {c.summary}"
-        for c in manifest.changes
-    )
+    fixes_text = []
+    for change in manifest.changes:
+        detail = fix_details.get(change.id, {})
+        line = f"- {change.id} [{change.component}]: {change.summary}"
+        if detail:
+            plat = detail.get("platform_raw", "?")
+            deploy = detail.get("deployment_raw", "?")
+            line += f"\n  Platform: {plat}\n  Deployment type: {deploy}"
+        fixes_text.append(line)
 
     prompt = (
         f"Classify each bug fix by the cluster topology needed to test it.\n\n"
-        f"Available topologies:\n{topology_descriptions}\n\n"
-        f"Fixes in z-stream {version}:\n{changes_text}\n\n"
-        f"For each fix, output a JSON object mapping fix ID to topology name. "
-        f"Most fixes need standard_ipi unless they specifically mention DR, "
-        f"provider-client, external mode, or LSO/baremetal. "
-        f"When uncertain, default to standard_ipi.\n\n"
-        f"Output ONLY valid JSON, no markdown fences."
+        f"Available topologies:\n{topology_list}\n\n"
+        f"Fixes in z-stream {version} (with platform and deployment info "
+        f"from Jira):\n" + "\n".join(fixes_text) + "\n\n"
+        f"Rules:\n"
+        f"- 'Internal' deployment → standard_ipi\n"
+        f"- 'External' or 'External mode' → external_mode\n"
+        f"- 'Provider' or 'Provider-Client' or 'Consumer' → provider_client\n"
+        f"- 'DR' or 'Regional DR' → regional_dr\n"
+        f"- 'Metro DR' or 'Stretch' or 'Arbiter' → metro_dr\n"
+        f"- 'LSO' or 'Internal-Attached' → lso_baremetal\n"
+        f"- 'Multicluster' with NooBaa/MCG → standard_ipi (MCG multicluster "
+        f"runs on standard IPI)\n"
+        f"- 'All platforms' or 'platform agnostic' → standard_ipi\n"
+        f"- When uncertain, default to standard_ipi\n\n"
+        f"Output ONLY valid JSON mapping fix ID to topology name."
     )
 
     try:
@@ -158,7 +294,10 @@ def _classify_with_ai(manifest: ChangeManifest, version: str) -> dict[str, str]:
                 result = result.split("\n", 1)[1].rsplit("```", 1)[0]
             parsed = json.loads(result)
             if isinstance(parsed, dict):
-                valid = {k: v for k, v in parsed.items() if v in TOPOLOGY_CONFIGS}
+                valid = {
+                    k: v for k, v in parsed.items()
+                    if v in TOPOLOGY_CONFIGS
+                }
                 if valid:
                     logger.info("AI classified %d fixes: %s", len(valid), valid)
                     return valid
@@ -168,39 +307,26 @@ def _classify_with_ai(manifest: ChangeManifest, version: str) -> dict[str, str]:
     return {}
 
 
-def _classify_heuristic(manifest: ChangeManifest) -> dict[str, str]:
-    """Fallback: classify fixes by component and keywords."""
-    keyword_map = {
-        "regional_dr": ["regional dr", "rdr", "ramen", "failover", "relocate"],
-        "metro_dr": ["metro dr", "mdr", "stretch", "arbiter", "netsplit"],
-        "provider_client": [
-            "provider", "consumer", "managed service", "rosa",
-            "storageclient", "hci",
-        ],
-        "external_mode": ["external ceph", "external mode", "rhcs"],
-        "lso_baremetal": ["lso", "local storage", "baremetal", "nvme"],
-    }
-
+def _classify_from_jira(
+    fix_details: dict, manifest: ChangeManifest
+) -> dict[str, str]:
+    """Fallback: classify using parsed Jira platform/deployment data."""
     classifications = {}
     for change in manifest.changes:
-        text = f"{change.component} {change.summary}".lower()
-        matched = "standard_ipi"
-        for topology, keywords in keyword_map.items():
-            if any(kw in text for kw in keywords):
-                matched = topology
-                break
-        classifications[change.id] = matched
-
-    logger.info("Heuristic classified %d fixes: %s", len(classifications), classifications)
+        detail = fix_details.get(change.id, {})
+        if detail and detail.get("topology_hint"):
+            classifications[change.id] = detail["topology_hint"]
+        else:
+            classifications[change.id] = "standard_ipi"
     return classifications
 
 
-def _tests_for_fixes(
-    fix_ids: list[str],
-    manifest: ChangeManifest,
-    selected_tests: list,
-) -> list:
-    """Find selected tests relevant to given fix IDs."""
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _tests_for_fixes(fix_ids, manifest, selected_tests):
     fix_components = set()
     for change in manifest.changes:
         if change.id in fix_ids:
@@ -211,10 +337,28 @@ def _tests_for_fixes(
     ]
 
 
+def _print_jira_analysis(fix_details: dict):
+    """Print what we extracted from Jira."""
+    if not fix_details:
+        return
+    print(f"\n{'='*60}")
+    print("  JIRA PLATFORM & DEPLOYMENT ANALYSIS")
+    print(f"{'='*60}\n")
+    for fix_id, detail in fix_details.items():
+        print(f"  {fix_id}: {detail['summary'][:60]}")
+        print(f"    Component:       {detail['component']}")
+        print(f"    Platform (raw):  {detail['platform_raw'] or '(not specified)'}")
+        print(f"    Platform:        {detail['platform_parsed']}")
+        print(f"    Deploy (raw):    {detail['deployment_raw'] or '(not specified)'}")
+        print(f"    Deploy type:     {detail['deployment_parsed']}")
+        print(f"    Topology hint:   {detail['topology_hint']}")
+        print()
+
+
 def _print_deployment_plan(specs: list[dict], version: str):
     """Print what would be sent to Jenkins."""
-    print(f"\n{'='*60}")
-    print(f"  DEPLOYMENT PLAN — z-stream {version}")
+    print(f"{'='*60}")
+    print(f"  DEPLOYMENT PLAN -- z-stream {version}")
     print(f"{'='*60}")
     print(f"\n  {len(specs)} deployment(s) needed:\n")
 
@@ -224,15 +368,23 @@ def _print_deployment_plan(specs: list[dict], version: str):
         print(f"      Fixes:     {', '.join(spec['fix_ids'])}")
         print(f"      Tests:     {spec['test_count']} selected")
         print(f"\n      Jenkins API call:")
-        print(f"      POST /job/{spec['jenkins_params']['JOB_NAME']}/buildWithParameters")
         params = spec["jenkins_params"]
+        print(
+            f"      POST /job/{params['JOB_NAME']}"
+            f"/buildWithParameters"
+        )
         for k, v in params.items():
             if k != "JOB_NAME":
                 print(f"        {k}={v}")
         print()
 
     print(f"{'='*60}")
-    print(f"  Total: {sum(s['fix_count'] for s in specs)} fixes across "
-          f"{len(specs)} topology/topologies")
-    print(f"  RUN_TEARDOWN=false on all — clusters kept alive for verification")
+    print(
+        f"  Total: {sum(s['fix_count'] for s in specs)} fixes "
+        f"across {len(specs)} topology/topologies"
+    )
+    print(
+        f"  RUN_TEARDOWN=false on all -- clusters kept alive "
+        f"for verification"
+    )
     print(f"{'='*60}\n")
