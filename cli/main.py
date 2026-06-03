@@ -68,6 +68,12 @@ def run(
         "--stop-after-pr",
         help="Run through PR creation then stop — skip Jenkins and analysis",
     ),
+    plan_deploy: bool = typer.Option(
+        False,
+        "--plan-deploy",
+        help="After test selection, classify fixes by topology and print "
+        "Jenkins deployment plan (no actual Jenkins calls)",
+    ),
     max_tests: int = typer.Option(
         0,
         "--max-tests",
@@ -155,6 +161,11 @@ def run(
             typer.echo("  Gaps:")
             for gap in coverage.gap_details:
                 typer.echo(f"    - [{gap.component}] {gap.reason}")
+
+    if plan_deploy and final_state.get("change_manifest"):
+        from nodes.topology_selector import topology_selector
+
+        topology_selector(final_state)
 
     if collect_only or stop_after_pr:
         if stop_after_pr:
