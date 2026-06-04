@@ -248,6 +248,122 @@ def jenkins_get_console_log(job_name: str, build_number: int) -> str:
         return json.dumps({"error": f"Failed to get console log: {str(exc)}"})
 
 
+def jenkins_queue_to_build(job_name: str, queue_number: int, timeout: int = 120) -> str:
+    """Resolve a queue item to a build number.
+
+    Polls the Jenkins queue until the item starts executing and
+    returns the build number.
+
+    Args:
+        job_name: The Jenkins job name.
+        queue_number: Queue item ID from jenkins_trigger_build.
+        timeout: Max seconds to wait (default 120).
+
+    Returns:
+        JSON with build_number and build URL, or error.
+    """
+    server, error = _get_jenkins_server()
+    if error:
+        return error
+
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            queue_info = server.get_queue_item(queue_number)
+            executable = queue_info.get("executable")
+            if executable:
+                build_number = executable.get("number")
+                build_url = executable.get("url", "")
+                return json.dumps(
+                    {
+                        "job_name": job_name,
+                        "build_number": build_number,
+                        "url": build_url,
+                        "message": f"Build #{build_number} started",
+                    },
+                    indent=2,
+                )
+            if queue_info.get("cancelled"):
+                return json.dumps({"error": "Queue item was cancelled"})
+        except Exception:
+            pass
+        time.sleep(5)
+
+    return json.dumps(
+        {"error": f"Timed out waiting for queue item {queue_number} after {timeout}s"}
+    )
+
+
+def jenkins_deploy(deployment_spec: dict, dry_run: bool = False) -> str:
+    """Trigger a Jenkins deployment from a topology selector spec.
+
+    Takes a deployment spec (from topology_selector) and triggers
+    the appropriate Jenkins job with the right parameters.
+
+    Args:
+        deployment_spec: Dict with topology, jenkins_params, fix_ids, etc.
+        dry_run: If True, print what would be sent without triggering.
+
+    Returns:
+        JSON with queue_number/build info, or error.
+    """
+    params = deployment_spec.get("jenkins_params", {})
+    job_name = params.pop("JOB_NAME", config.JENKINS_JOB_NAME)
+    topology = deployment_spec.get("topology", "unknown")
+    fix_ids = deployment_spec.get("fix_ids", [])
+
+    if dry_run:
+        return json.dumps(
+            {
+                "dry_run": True,
+                "job_name": job_name,
+                "topology": topology,
+                "fix_ids": fix_ids,
+                "parameters": params,
+                "message": f"Would trigger {job_name} for {topology}",
+            },
+            indent=2,
+        )
+
+    result_str = jenkins_trigger_build(job_name, json.dumps(params))
+    result = json.loads(result_str)
+
+    if "error" in result:
+        return result_str
+
+    result["topology"] = topology
+    result["fix_ids"] = fix_ids
+    return json.dumps(result, indent=2)
+
+
+def jenkins_deploy_all(deployment_specs: list[dict], dry_run: bool = False) -> str:
+    """Trigger Jenkins deployments for all topology specs.
+
+    Args:
+        deployment_specs: List of specs from topology_selector.
+        dry_run: If True, print without triggering.
+
+    Returns:
+        JSON with results per topology.
+    """
+    results = []
+    for spec in deployment_specs:
+        result_str = jenkins_deploy(spec, dry_run=dry_run)
+        result = json.loads(result_str)
+        results.append(result)
+
+    summary = {
+        "total_deployments": len(results),
+        "triggered": sum(1 for r in results if "queue_number" in r),
+        "dry_run": sum(1 for r in results if r.get("dry_run")),
+        "errors": sum(1 for r in results if "error" in r),
+        "deployments": results,
+    }
+    return json.dumps(summary, indent=2)
+
+
 # Tool-wrapped versions for LangGraph ReAct agents
 jenkins_trigger_build_tool = tool(jenkins_trigger_build)
 jenkins_get_build_status_tool = tool(jenkins_get_build_status)

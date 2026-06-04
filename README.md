@@ -64,6 +64,12 @@ zstream run 4.16.2 --collect-only
 # Stop after PR is created (skip Jenkins + analysis)
 zstream run 4.16.2 --stop-after-pr
 
+# Plan deployments (classify fixes by topology, print Jenkins API calls)
+zstream run 4.16.2 --collect-only --plan-deploy
+
+# Actually trigger Jenkins deployments per topology
+zstream run 4.16.2 --stop-after-pr --deploy
+
 # Override max tests (default 50)
 zstream run 4.16.2 --max-tests 30
 

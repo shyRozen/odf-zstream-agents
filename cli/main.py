@@ -74,6 +74,11 @@ def run(
         help="After test selection, classify fixes by topology and print "
         "Jenkins deployment plan (no actual Jenkins calls)",
     ),
+    deploy: bool = typer.Option(
+        False,
+        "--deploy",
+        help="Classify fixes by topology AND trigger Jenkins deployments",
+    ),
     max_tests: int = typer.Option(
         0,
         "--max-tests",
@@ -162,10 +167,30 @@ def run(
             for gap in coverage.gap_details:
                 typer.echo(f"    - [{gap.component}] {gap.reason}")
 
-    if plan_deploy and final_state.get("change_manifest"):
+    if (plan_deploy or deploy) and final_state.get("change_manifest"):
         from nodes.topology_selector import topology_selector
 
-        topology_selector(final_state)
+        topo_result = topology_selector(final_state)
+
+        if deploy and topo_result.get("deployment_specs"):
+            from tools.jenkins_tools import jenkins_deploy_all
+
+            typer.echo("\nTriggering Jenkins deployments...")
+            deploy_result = json.loads(
+                jenkins_deploy_all(topo_result["deployment_specs"])
+            )
+            typer.echo(
+                f"  Triggered: {deploy_result['triggered']} | "
+                f"Errors: {deploy_result['errors']}"
+            )
+            for d in deploy_result.get("deployments", []):
+                if "queue_number" in d:
+                    typer.echo(
+                        f"  [{d.get('topology', '?')}] "
+                        f"Queue #{d['queue_number']} → {d['job_name']}"
+                    )
+                elif "error" in d:
+                    typer.echo(f"  [{d.get('topology', '?')}] ERROR: {d['error']}")
 
     if collect_only or stop_after_pr:
         if stop_after_pr:
