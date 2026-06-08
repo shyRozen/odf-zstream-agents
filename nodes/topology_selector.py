@@ -327,13 +327,30 @@ def _classify_from_jira(
 
 
 def _tests_for_fixes(fix_ids, manifest, selected_tests):
+    from core import config as cfg
+
+    squad_mapping = cfg.SQUAD_MAPPING or {}
     fix_components = set()
     for change in manifest.changes:
         if change.id in fix_ids:
             fix_components.add(change.component.lower())
+
+    # Build set of directories for these components
+    fix_dirs = set()
+    for comp in fix_components:
+        entry = squad_mapping.get(comp, {})
+        if isinstance(entry, dict):
+            for p in entry.get("paths", []):
+                fix_dirs.add(p.rstrip("/"))
+        # Also try component name in path as fallback
+        fix_dirs.add(comp)
+
     return [
         t for t in selected_tests
-        if any(c in t.file_path.lower() for c in fix_components)
+        if any(
+            t.file_path.lower().startswith(d) or d in t.file_path.lower()
+            for d in fix_dirs
+        )
     ]
 
 
