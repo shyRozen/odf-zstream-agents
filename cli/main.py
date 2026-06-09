@@ -172,6 +172,22 @@ def run(
 
         topo_result = topology_selector(final_state)
 
+        # Add deployment plan as PR comment
+        pr_number = final_state.get("pr_number", 0)
+        if pr_number and topo_result.get("deployment_specs"):
+            from nodes.topology_selector import _format_deployment_comment
+
+            comment = _format_deployment_comment(
+                topo_result["deployment_specs"], zstream,
+            )
+            try:
+                from tools.github_tools import github_comment_pr
+
+                github_comment_pr(pr_number, comment)
+                typer.echo(f"  Deployment plan added as comment on PR #{pr_number}")
+            except Exception as e:
+                typer.echo(f"  Failed to comment on PR: {e}")
+
         if deploy and topo_result.get("deployment_specs"):
             from tools.jenkins_tools import jenkins_deploy_all
 
