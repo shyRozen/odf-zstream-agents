@@ -51,6 +51,7 @@ def topology_selector(state: PipelineState) -> dict:
     parts = version.split(".")
     ocs_version = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else version
     mark_name = f"zstream_{version.replace('.', '_').replace('-', '_')}"
+    pr_number = state.get("pr_number", 0)
 
     catalog = _load_catalog()
     fix_details = _fetch_jira_details(manifest)
@@ -90,6 +91,11 @@ def topology_selector(state: PipelineState) -> dict:
                 "CLUSTER_CONF": entry.get("cluster_conf", ""),
                 "TEST_MARK_EXPRESSION": mark_name,
                 "TEST_PATH": "tests/",
+                "OCS_CI_REPOSITORY_BRANCH": (
+                    f"pr/{pr_number}|release-{ocs_version}"
+                    if pr_number
+                    else ""
+                ),
                 "RUN_INSTALL_OCP": True,
                 "RUN_INSTALL_OCS": True,
                 "RUN_TEST": True,
