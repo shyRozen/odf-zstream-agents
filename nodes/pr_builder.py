@@ -133,13 +133,14 @@ def pr_builder(state: PipelineState) -> dict:
 
         pr_url = ""
         pr_number = 0
+        if isinstance(pr_result, str):
+            try:
+                pr_result = json.loads(pr_result)
+            except (json.JSONDecodeError, TypeError):
+                pass
         if isinstance(pr_result, dict):
             pr_url = pr_result.get("url", pr_result.get("html_url", ""))
-            pr_number = pr_result.get("number", 0)
-        elif isinstance(pr_result, str):
-            pr_url = pr_result
-        elif isinstance(pr_result, int):
-            pr_number = pr_result
+            pr_number = pr_result.get("pr_number", pr_result.get("number", 0))
 
         logger.info("PR created: %s (#%d)", pr_url, pr_number)
 
