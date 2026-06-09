@@ -1,0 +1,1326 @@
+[
+  {
+    "job": "qe-trigger-aws-ipi-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-3m-3w-live",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-3m-3w-gp3",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "deployment_aws_ipi_3az_rhcos_3m_3w_gp3_config"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-encryption-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-encryption-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-arbiter-3az-rhcos-3m-6w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_6w_arbiter.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-arbiter-3az-rhcos-3m-4w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_4w_arbiter.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-arbiter-encryption-3az-rhcos-3m-4w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "encryption",
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_4w_arbiter.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-arbiter-fips-3az-rhcos-3m-4w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_4w_arbiter.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-arbiter-fips-encryption-3az-rhcos-3m-4w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "encryption",
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_4w_arbiter.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-3m-6w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-encryption-3az-rhcos-3m-6w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-3az-rhcos-3m-6w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-encryption-3az-rhcos-3m-6w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-1az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-encryption-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "encryption",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-encryption-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "encryption",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-3m-3w-3i",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-3az-rhcos-3m-3w-3i",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-encryption-3az-rhcos-3m-3w-3i",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-fips-encryption-3az-rhcos-3m-3w-3i",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-vault-v1-external-namespace-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "external",
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w_vault_v1_external_with_namespace.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-vault-v2-external-namespace-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "external",
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w_vault_v2_external_with_namespace.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-vault-v1-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w_vault_v1.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-vault-v2-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w_vault_v2.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-vault-v2-fips-3az-rhcos-3m-3w-3i",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_3i_vault_v2.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-thales-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w_thales.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-kms-thales-fips-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_1az_rhcos_3m_3w_thales.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-sts-kms-thales-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "kms",
+      "sts"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_sts_3m_3w_thales.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-graviton-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "graviton"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_graviton.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-graviton-fips-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "graviton"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_3m_3w_graviton.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-graviton-sts-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "graviton",
+      "sts"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_sts_3m_3w_graviton.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-3az-rhcos-lowerreq-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-1az-rhcos-sts-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "sts"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_sts_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/upi_1az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-encryption-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-fips-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-fips-encryption-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "fips",
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-1az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_1az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-encryption-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "encryption",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-fips-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "fips",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-fips-encryption-3az-rhcos-lso-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "fips",
+      "encryption",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-proxy-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "proxy"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_1az_rhcos_3m_3w_proxy.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-proxy-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "proxy"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_3m_3w_proxy.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-disconnected-1az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "disconnected"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_1az_rhcos_3m_3w_disconnected.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-upi-disconnected-3az-rhcos-3m-3w",
+    "platform": "aws",
+    "install": "upi",
+    "features": [
+      "disconnected"
+    ],
+    "cluster_conf": "conf/deployment/aws/upi_3az_rhcos_3m_3w_disconnected.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-rosa-hcp-1az-rhcos-3w",
+    "platform": "aws",
+    "install": "managed",
+    "features": [],
+    "cluster_conf": "conf/deployment/aws/rosa_hcp_1az_3w_m5.12x.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vmfs-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vmfs-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vmfs-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vmfs-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-ipv6-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "ipv6"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_ipv6.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-3m-3w-live",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-pgdb-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "external-db"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_external_noobaa_db_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-proxy-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "proxy"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_proxy.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-disconnected-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "disconnected"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_disconnected.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-disconnected-1az-rhcos-vsan-compact-mode-3m-0w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "disconnected",
+      "compact"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_compact_mode_3m_0w_disconnected.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-fips-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-lso-rdm-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_rdm_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vsan-lso-rdm-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_rdm_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-lso-vmdk-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vsan-lso-vmdk-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vsan-lso-rdm-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_rdm_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vsan-lso-rdm-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_rdm_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vsan-lso-vmdk-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips",
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vsan-lso-vmdk-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-kms-vault-v1-external-namespace-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "external",
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_external_vault_v1_with_namespace.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-kms-vault-v2-external-namespace-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "external",
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_external_vault_v2_with_namespace.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-kms-vault-v1-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_vault_v1.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-kms-vault-v2-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_vault_v2.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vsan-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vsan-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vsan-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vmfs-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-1az-rhcos-vmfs-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-encryption-1az-rhcos-vmfs-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-fips-encryption-1az-rhcos-vmfs-3m-3w-3i",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vmfs_3m_3w_3i.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-lowerreq-vmfs-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-lowerreq-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-lowerreq-lean-profile-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-multi-storagecluster-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "multi-sc"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_multi_storagecluster.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-ipv6-1az-rhcos-multus-vsan-lso-vmdk-thick-sc-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso",
+      "multus",
+      "ipv6"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_multus_vsan_3m_3w.yaml conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_ipv6.yaml conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_3w.yaml conf/deployment/vsphere/zeroedthick_storage_class.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-ipv6-1az-rhcos-vsan-lso-vmdk-thick-sc-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso",
+      "ipv6"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_ipv6.yaml conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_3w.yaml conf/deployment/vsphere/zeroedthick_storage_class.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-encryption-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-fips-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-fips-encryption-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-multus-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_multus_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-multus-cluster-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_multus_cluster_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-multus-public-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_multus_public_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-lowerreq-vmfs-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-lowerreq-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-vsan-compact-mode-3m-0w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "compact"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_compact_mode_3m_0w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-vsan-mcg-only-deployment-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_mcg_only_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-vsan-mcg-only-deployment-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_mcg_only_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-aws-ipi-sts-3az-rhcos-mcg-only-deployment-3m-3w",
+    "platform": "aws",
+    "install": "ipi",
+    "features": [
+      "sts"
+    ],
+    "cluster_conf": "conf/deployment/aws/ipi_3az_rhcos_sts_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-external-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "external"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml conf/ocsci/external_rhcs_cluster.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-external-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "external"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml conf/ocsci/external_rhcs_cluster.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-1az-rhcos-external-rgw-ssl-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "external",
+      "rgw-ssl"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w.yaml conf/ocsci/external_rhcs_cluster.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-1az-rhcos-external-rgw-ssl-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "external",
+      "rgw-ssl"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml conf/ocsci/external_rhcs_cluster.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-2az-rhcos-lso-vmdk-arbiter-3m-6w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso",
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_lso_vmdk_3m_6w_arbiter.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-upi-intransit-encryption-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "intransit-encryption"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_1az_rhcos_vsan_3m_3w_intransit_encryption.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-intransit-encryption-1az-rhcos-vsan-compact-mode-3m-0w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "compact",
+      "intransit-encryption"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_compact_mode_3m_0w_intransit_encryption.yaml"
+  },
+  {
+    "job": "qe-trigger-vsphere-ipi-intransit-encryption-1az-rhcos-vsan-3m-6w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [
+      "intransit-encryption"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_6w_intransit_encryption.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-ipi-1az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/azure/ipi_1az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-ipi-fips-encryption-1az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "ipi",
+    "features": [
+      "fips",
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/azure/ipi_1az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-ipi-encryption-key-vault-1az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "ipi",
+    "features": [
+      "kms"
+    ],
+    "cluster_conf": "conf/deployment/azure/ipi_1az_rhcos_3m_3w_encryption_azure_kv.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-ipi-perfplus-512-1az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "ipi",
+    "features": [
+      "perfplus"
+    ],
+    "cluster_conf": "conf/deployment/azure/ipi_1az_rhcos_3m_3w_perfplus.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-ipi-perfplus-1024-1az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "ipi",
+    "features": [
+      "perfplus"
+    ],
+    "cluster_conf": "conf/deployment/azure/ipi_1az_rhcos_3m_3w_perfplus.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-ipi-3az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/azure/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-azure-managed-aro-3az-rhcos-3m-3w",
+    "platform": "azure",
+    "install": "managed",
+    "features": [],
+    "cluster_conf": "conf/deployment/azure/managed_aro_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-gcp-ipi-1az-rhcos-3m-3w",
+    "platform": "gcp",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/gcp/ipi_1az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-gcp-ipi-1az-rhcos-3m-3w-shielded-machines",
+    "platform": "gcp",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/gcp/ipi_1az_rhcos_3m_3w_shielded_machines.yaml "
+  },
+  {
+    "job": "qe-trigger-gcp-ipi-1az-rhcos-3m-3w-fips-shielded-machines",
+    "platform": "gcp",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/gcp/ipi_1az_rhcos_3m_3w_shielded_machines.yaml "
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-fips-1az-rhcos-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-encryption-1az-rhcos-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "encryption"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-fips-encryption-1az-rhcos-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "fips"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-nvme-intel-compact-mode-3m-0w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "compact"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_compact_mode.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-fips-1az-nvme-intel-compact-mode-3m-0w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "fips",
+      "compact"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_compact_mode.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-encryption-1az-nvme-intel-compact-mode-3m-0w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "compact"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_compact_mode.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-fips-encryption-1az-nvme-intel-compact-mode-3m-0w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "compact"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_compact_mode.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-multus-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_multus_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-multus-vlan-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_multus_nvme_intel_3m_3w_vlan.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-multus-cluster-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_multus_cluster_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-multus-vlan-cluster-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_multus_nvme_intel_3m_3w_vlan_cluster_only.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-multus-public-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_multus_public_nvme_intel_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-baremetal-upi-1az-rhcos-multus-vlan-public-nvme-intel-3m-3w",
+    "platform": "baremetal",
+    "install": "upi",
+    "features": [
+      "multus"
+    ],
+    "cluster_conf": "conf/deployment/baremetal/upi_1az_rhcos_multus_nvme_intel_3m_3w_vlan_public_only.yaml"
+  },
+  {
+    "job": "qe-trigger-ibmcloud-managed-1az-rhel-3w",
+    "platform": "ibmcloud",
+    "install": "managed",
+    "features": [],
+    "cluster_conf": "conf/deployment/ibmcloud/ibm_cloud_vpc_cluster.yaml"
+  },
+  {
+    "job": "qe-trigger-ibmcloud-ipi-3az-rhcos-3m-3w",
+    "platform": "ibmcloud",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/ibmcloud/ipi_3az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-ibmcloud-ipi-3az-rhcos-lowerreq-lean-profile-3m-3w",
+    "platform": "ibmcloud",
+    "install": "ipi",
+    "features": [
+      "lean"
+    ],
+    "cluster_conf": "conf/deployment/ibmcloud/ipi_3az_rhcos_lowerreq_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-ibmcloud-ipi-3az-rhcos-performance-profile-3m-6w",
+    "platform": "ibmcloud",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/ibmcloud/ipi_3az_rhcos_3m_6w.yaml"
+  },
+  {
+    "job": "qe-trigger-rhv-ipi-1az-rhcos-3m-3w",
+    "platform": "rhv",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/rhv/ipi_1az_rhcos_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-rhv-ipi-1az-rhcos-lso-3m-3w",
+    "platform": "rhv",
+    "install": "ipi",
+    "features": [
+      "lso"
+    ],
+    "cluster_conf": "conf/deployment/rhv/ipi_1az_rhcos_lso_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-fdf-vsphere-ipi-1az-rhcos-vsan-3m-3w",
+    "platform": "vsphere",
+    "install": "ipi",
+    "features": [],
+    "cluster_conf": "conf/deployment/vsphere/ipi_1az_rhcos_vsan_3m_3w.yaml"
+  },
+  {
+    "job": "qe-trigger-fdf-vsphere-upi-2az-rhcos-lso-vmdk-arbiter-providermode-3m-4w",
+    "platform": "vsphere",
+    "install": "upi",
+    "features": [
+      "lso",
+      "arbiter"
+    ],
+    "cluster_conf": "conf/deployment/vsphere/upi_2az_rhcos_vsan_lso_vmdk_3m_4w_arbiter.yaml"
+  }
+]
