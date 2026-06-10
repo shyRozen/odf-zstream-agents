@@ -217,10 +217,10 @@ def mark_matcher(state: MapState) -> dict:
 
     results = top_results
 
-    logger.info(
-        "Selected %d test cases (from %d files in search areas)",
-        len(results),
-        len(index.get("files", [])),
+    print(
+        f"  [Mark Matcher] Selected {len(results)} tests "
+        f"(from {len(index.get('files', []))} indexed files)",
+        flush=True,
     )
     return {"scored_tests": results}
 

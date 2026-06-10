@@ -123,7 +123,11 @@ def run(
     pipeline = build_pipeline(collect_only=collect_only, stop_after_pr=stop_after_pr)
 
     typer.echo("Invoking pipeline...\n")
-    final_state = pipeline.invoke(initial_state)
+    try:
+        final_state = pipeline.invoke(initial_state)
+    except Exception as e:
+        typer.echo(f"\nPipeline error: {e}")
+        raise typer.Exit(1)
 
     # ── Summary ──────────────────────────────────────────────────────
     typer.echo("\n" + "=" * 50)

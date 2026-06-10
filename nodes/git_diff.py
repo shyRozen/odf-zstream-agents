@@ -34,7 +34,7 @@ def git_diff(state: InspectState) -> dict:
         logger.info("No PR URLs found, skipping PR analysis")
         return {"git_changes": []}
 
-    logger.info("Fetching diffs for %d PRs", len(pr_urls))
+    print(f"  [PR Analyzer] Fetching diffs for {len(pr_urls)} PRs...", flush=True)
 
     try:
         from tools.github_tools import github_get_pr_files
@@ -113,7 +113,7 @@ def git_diff(state: InspectState) -> dict:
         except Exception as e:
             logger.warning("Error analyzing PR %s: %s", pr_url, e)
 
-    logger.info("Analyzed %d PRs → %d changes", len(pr_urls), len(changes))
+    print(f"  [PR Analyzer] Analyzed {len(pr_urls)} PRs -> {len(changes)} changes", flush=True)
     return {"git_changes": changes}
 
 

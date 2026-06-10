@@ -65,7 +65,7 @@ def jira_inspector(state: InspectState) -> dict:
 
         issues = data.get("issues", [])
         if not issues:
-            logger.info("No Jira issues found for version %s", version)
+            print(f"  [Jira] No bugs found for {version}")
             return {"jira_changes": []}
 
         changes = []
@@ -99,12 +99,7 @@ def jira_inspector(state: InspectState) -> dict:
                 )
             )
 
-        logger.info(
-            "Found %d bugs, %d PRs for version %s",
-            len(changes),
-            total_prs,
-            version,
-        )
+        print(f"  [Jira] {len(changes)} bugs, {total_prs} PRs for {version}", flush=True)
         return {"jira_changes": changes}
 
     except Exception as e:
