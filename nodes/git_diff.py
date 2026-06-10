@@ -71,13 +71,17 @@ def git_diff(state: InspectState) -> dict:
             component = _repo_to_component(repo)
 
             # AI analysis of the PR diff
-            ai_analysis = _analyze_pr_with_ai(
-                pr_url=pr_url,
-                pr_title=pr_title,
-                repo=repo,
-                files=files,
-                component=component,
-            )
+            try:
+                ai_analysis = _analyze_pr_with_ai(
+                    pr_url=pr_url,
+                    pr_title=pr_title,
+                    repo=repo,
+                    files=files,
+                    component=component,
+                )
+            except Exception as ai_err:
+                print(f"      AI failed: {ai_err}", flush=True)
+                ai_analysis = {}
 
             summary = ai_analysis.get("summary", f"[{repo}] {pr_title}")
             affected_features = ai_analysis.get("affected_features", [])
