@@ -20,8 +20,7 @@ import typer
 
 def _signal_handler(signum, frame):
     name = signal.Signals(signum).name
-    print(f"\n  KILLED by signal {signum} ({name})", flush=True)
-    sys.exit(128 + signum)
+    print(f"\n  [signal {signum} ({name}) received, ignoring]", flush=True)
 
 
 for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGPIPE):
