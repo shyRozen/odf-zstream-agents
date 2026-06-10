@@ -51,16 +51,9 @@ def git_diff(state: InspectState) -> dict:
             ],
         }
 
-    # Only analyze PRs from known Red Hat / ODF repos
-    known_orgs = {"red-hat-storage", "noobaa", "rook"}
-
     changes = []
     for idx, pr_url in enumerate(pr_urls, 1):
-        pr_short = f"{pr_url.split('/')[-4]}/{pr_url.split('/')[-3]}/{pr_url.split('/')[-1]}"
-        org = pr_url.split("github.com/")[-1].split("/")[0] if "github.com" in pr_url else ""
-        if org and org not in known_orgs:
-            print(f"    [{idx}/{len(pr_urls)}] {pr_short} (skipped, external repo)", flush=True)
-            continue
+        pr_short = "/".join(pr_url.split("/")[-4:]) if "github.com" in pr_url else pr_url
         print(f"    [{idx}/{len(pr_urls)}] {pr_short}", flush=True)
         try:
             raw = github_get_pr_files(pr_url)
