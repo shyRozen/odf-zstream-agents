@@ -51,15 +51,23 @@ def git_diff(state: InspectState) -> dict:
             ],
         }
 
+    # Only analyze PRs from known Red Hat / ODF repos
+    known_orgs = {"red-hat-storage", "noobaa", "rook"}
+
     changes = []
     for idx, pr_url in enumerate(pr_urls, 1):
-        print(f"    [{idx}/{len(pr_urls)}] {pr_url.split('/')[-3]}/{pr_url.split('/')[-1]}", flush=True)
+        pr_short = f"{pr_url.split('/')[-4]}/{pr_url.split('/')[-3]}/{pr_url.split('/')[-1]}"
+        org = pr_url.split("github.com/")[-1].split("/")[0] if "github.com" in pr_url else ""
+        if org and org not in known_orgs:
+            print(f"    [{idx}/{len(pr_urls)}] {pr_short} (skipped, external repo)", flush=True)
+            continue
+        print(f"    [{idx}/{len(pr_urls)}] {pr_short}", flush=True)
         try:
             raw = github_get_pr_files(pr_url)
             data = json.loads(raw) if isinstance(raw, str) else raw
 
             if "error" in data:
-                logger.warning("Failed to fetch PR %s: %s", pr_url, data["error"])
+                print(f"      ERROR: {data['error'][:80]}", flush=True)
                 continue
 
             repo = data.get("repo", "")
@@ -112,7 +120,7 @@ def git_diff(state: InspectState) -> dict:
             )
 
         except Exception as e:
-            logger.warning("Error analyzing PR %s: %s", pr_url, e)
+            print(f"      ERROR: {e}", flush=True)
 
     print(f"  [PR Analyzer] Analyzed {len(pr_urls)} PRs -> {len(changes)} changes", flush=True)
     return {"git_changes": changes}
