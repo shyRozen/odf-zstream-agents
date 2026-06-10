@@ -43,15 +43,23 @@ def _run_claude_code(
         for t in allowed_tools:
             cmd.extend(["--allowedTools", t])
 
+    import os as _os
+
+    env = _os.environ.copy()
+    env["TERM"] = "dumb"
+    env["NO_COLOR"] = "1"
+
     try:
         result = subprocess.run(
             cmd,
             input=prompt,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
             timeout=timeout_seconds,
             cwd=cwd or str(PROJECT_ROOT),
             start_new_session=True,
+            env=env,
         )
         output = result.stdout.strip()
         if result.returncode != 0 and not output:
