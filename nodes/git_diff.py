@@ -67,6 +67,15 @@ def git_diff(state: InspectState) -> dict:
             pr_title = data.get("title", "")
             pr_number = data.get("pr_number", "")
             files = data.get("files", [])
+
+            # Skip our own z-stream PRs from previous pipeline runs
+            if "ocs-ci" in repo and any(
+                kw in pr_title.lower()
+                for kw in ["z-stream", "zstream", "test enablement"]
+            ):
+                print(f"      (skipped: own z-stream PR)", flush=True)
+                continue
+
             filenames = [f["filename"] for f in files]
             component = _repo_to_component(repo)
 
