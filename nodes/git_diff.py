@@ -52,7 +52,8 @@ def git_diff(state: InspectState) -> dict:
         }
 
     changes = []
-    for pr_url in pr_urls:
+    for idx, pr_url in enumerate(pr_urls, 1):
+        print(f"    [{idx}/{len(pr_urls)}] {pr_url.split('/')[-3]}/{pr_url.split('/')[-1]}", flush=True)
         try:
             raw = github_get_pr_files(pr_url)
             data = json.loads(raw) if isinstance(raw, str) else raw

@@ -45,7 +45,7 @@ llm:
   max_tokens: 4096
   claude_code:
     max_turns: 10
-    default_timeout: 120
+    default_timeout: 180
     opus_timeout: 300
     allowed_tools_default: []
     allowed_tools_with_files: ["Read", "Bash(find*)", "Bash(grep*)", "Bash(cat*)"]
