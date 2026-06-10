@@ -11,8 +11,21 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
+import signal
+import sys
 
 import typer
+
+
+def _signal_handler(signum, frame):
+    name = signal.Signals(signum).name
+    print(f"\n  KILLED by signal {signum} ({name})", flush=True)
+    sys.exit(128 + signum)
+
+
+for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGPIPE):
+    signal.signal(sig, _signal_handler)
 
 from core.state import PipelineState
 
