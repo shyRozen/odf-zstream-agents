@@ -134,10 +134,28 @@ def _fetch_jira_details(manifest: ChangeManifest) -> dict[str, dict]:
     except ImportError:
         return {}
 
-    details = {}
+    # Only fetch bugs that might have platform info (skip CVEs and PRs)
+    bugs_to_fetch = []
     for change in manifest.changes:
         if not change.id.startswith("DFBUGS"):
             continue
+        # CVE bugs rarely have platform info
+        if "CVE-" in change.summary:
+            continue
+        bugs_to_fetch.append(change)
+
+    if not bugs_to_fetch:
+        return {}
+
+    print(
+        f"  [Topology] Fetching Jira details for "
+        f"{len(bugs_to_fetch)} bugs (skipping "
+        f"{sum(1 for c in manifest.changes if 'CVE-' in c.summary)} CVEs)...",
+        flush=True,
+    )
+
+    details = {}
+    for change in bugs_to_fetch:
         try:
             raw = json.loads(jira_get_issue(change.id))
             desc = raw.get("description", "")
@@ -155,6 +173,21 @@ def _fetch_jira_details(manifest: ChangeManifest) -> dict[str, dict]:
             }
         except Exception as e:
             logger.warning("Failed to fetch %s: %s", change.id, e)
+
+    # Add CVE bugs with defaults (standard IPI, no platform info)
+    for change in manifest.changes:
+        if change.id.startswith("DFBUGS") and change.id not in details:
+            details[change.id] = {
+                "summary": change.summary,
+                "component": change.component,
+                "platform_raw": "",
+                "platform": "unknown",
+                "install_type": "unknown",
+                "deployment_raw": "",
+                "deployment_type": "unknown",
+                "special_requirements": [],
+            }
+
     return details
 
 
