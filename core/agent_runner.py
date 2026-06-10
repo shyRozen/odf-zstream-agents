@@ -51,13 +51,22 @@ def _run_claude_code(
             text=True,
             timeout=timeout_seconds,
             cwd=cwd or str(PROJECT_ROOT),
+            start_new_session=True,
         )
         output = result.stdout.strip()
         if result.returncode != 0 and not output:
             logger.warning("claude exited %d: %s", result.returncode, result.stderr[:500])
             return result.stderr[:1000] if result.stderr else "Agent returned no output"
         return output
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        # Kill the process group to clean up
+        import os
+        import signal
+        if e.timeout:
+            try:
+                os.killpg(os.getpgid(e.timeout), signal.SIGKILL)
+            except Exception:
+                pass
         logger.error("claude timed out after %ds", timeout_seconds)
         return f"Agent timed out after {timeout_seconds}s"
     except FileNotFoundError:
