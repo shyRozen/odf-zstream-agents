@@ -94,13 +94,14 @@ def mark_matcher(state: MapState) -> dict:
         file_tiers = file_info.get("tiers", [])
         file_desc = file_info.get("description", "")
 
-        # Determine component from directory
-        file_dir = str(Path(file_path).parent)
-        comp = ""
-        for dir_key, dir_comp in dir_to_component.items():
-            if file_dir.startswith(dir_key.rstrip("/")):
-                comp = dir_comp
-                break
+        # Component from index (set by update_map.py), fallback to directory mapping
+        comp = file_info.get("component", "")
+        if not comp:
+            file_dir = str(Path(file_path).parent)
+            for dir_key, dir_comp in dir_to_component.items():
+                if file_dir.startswith(dir_key.rstrip("/")):
+                    comp = dir_comp
+                    break
 
         for func in file_info.get("test_functions", []):
             score = _score_test_function(

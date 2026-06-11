@@ -106,6 +106,17 @@ def topology_selector(state: PipelineState) -> dict:
             if t.component and t.component in deployment_components
         )
 
+        # Classify each fix as test-verified or deploy-verified
+        fix_verification = {}
+        for fix_id in fix_ids:
+            comp = fix_to_component.get(fix_id, "")
+            fix_tests = sum(
+                1 for t in selected_tests if t.component == comp
+            ) if comp else 0
+            fix_verification[fix_id] = "test" if fix_tests > 0 else "deploy"
+
+        has_tests = test_count > 0
+
         specs.append({
             "job_name": job_name,
             "platform": entry.get("platform", "unknown"),
@@ -115,20 +126,21 @@ def topology_selector(state: PipelineState) -> dict:
             "fix_ids": fix_ids,
             "fix_count": len(fix_ids),
             "test_count": test_count,
+            "fix_verification": fix_verification,
             "jenkins_params": {
                 "OCS_VERSION": ocs_version,
                 "OCP_VERSION": ocs_version,
                 "CLUSTER_CONF": entry.get("cluster_conf", ""),
-                "TEST_MARK_EXPRESSION": test_mark_expr,
-                "TEST_PATH": "tests/",
+                "TEST_MARK_EXPRESSION": test_mark_expr if has_tests else "",
+                "TEST_PATH": "tests/" if has_tests else "",
                 "OCS_CI_REPOSITORY_BRANCH": (
                     f"pr/{pr_number}|release-{ocs_version}"
-                    if pr_number
+                    if pr_number and has_tests
                     else ""
                 ),
                 "RUN_INSTALL_OCP": True,
                 "RUN_INSTALL_OCS": True,
-                "RUN_TEST": True,
+                "RUN_TEST": has_tests,
                 "RUN_TEARDOWN": False,
                 "PRODUCTION_RUN": True,
                 "REPORT_PORTAL": True,
@@ -465,10 +477,17 @@ def _print_deployment_plan(specs: list[dict], version: str):
         print(f"      Platform:  {spec['platform']} {spec['install']}")
         print(f"      Features:  {features}")
         print(f"      Config:    {spec['cluster_conf']}")
-        print(f"      Fixes:     {', '.join(spec['fix_ids'])}")
+        fix_ver = spec.get("fix_verification", {})
+        for fix_id in spec["fix_ids"]:
+            vtype = fix_ver.get(fix_id, "?")
+            icon = "✓ test" if vtype == "test" else "○ deploy-only"
+            print(f"      {fix_id}: {icon}")
         print(f"      Tests:     {spec.get('test_count', '?')}")
-        expr = spec["jenkins_params"].get("TEST_MARK_EXPRESSION", "?")
-        print(f"      Markers:   {expr}")
+        if spec["jenkins_params"].get("RUN_TEST"):
+            expr = spec["jenkins_params"].get("TEST_MARK_EXPRESSION", "?")
+            print(f"      Markers:   {expr}")
+        else:
+            print(f"      Mode:      deploy-only (RUN_TEST=false)")
         print(f"\n      Jenkins API call:")
         params = spec["jenkins_params"]
         print(
@@ -516,9 +535,23 @@ def _format_deployment_comment(specs: list[dict], version: str) -> str:
             f"| **Platform** | {spec['platform']} {spec['install']} |",
             f"| **Features** | {features} |",
             f"| **Config** | `{spec['cluster_conf']}` |",
-            f"| **Fixes** | {', '.join(spec['fix_ids'])} |",
             f"| **Tests** | {spec.get('test_count', '?')} |",
-            f"| **Markers** | `{spec['jenkins_params'].get('TEST_MARK_EXPRESSION', '?')}` |",
+            f"| **Mode** | {'test + deploy' if spec['jenkins_params'].get('RUN_TEST') else 'deploy-only'} |",
+        ])
+        fix_ver = spec.get("fix_verification", {})
+        lines.append("")
+        lines.append("**Fixes:**")
+        for fix_id in spec["fix_ids"]:
+            vtype = fix_ver.get(fix_id, "?")
+            icon = "✅" if vtype == "test" else "🔧"
+            label = "test-verified" if vtype == "test" else "deploy-verified"
+            lines.append(f"- {icon} {fix_id} ({label})")
+        if spec["jenkins_params"].get("RUN_TEST"):
+            lines.append(f"")
+            lines.append(
+                f"**Markers:** `{spec['jenkins_params'].get('TEST_MARK_EXPRESSION', '?')}`"
+            )
+        lines.extend([
             "",
             "<details>",
             "<summary>Jenkins parameters</summary>",

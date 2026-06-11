@@ -63,7 +63,9 @@ class TestSelection(BaseModel):
 
 def component_marker_name(base_mark: str, component: str) -> str:
     """Build a per-component marker name from a base zstream marker and component."""
-    comp_safe = component.replace("-", "_").replace(".", "_").lower()
+    import re
+    comp_safe = re.sub(r"[^a-z0-9_]", "_", component.lower())
+    comp_safe = re.sub(r"_+", "_", comp_safe).strip("_")
     return f"{base_mark}_{comp_safe}"
 
 
