@@ -4,7 +4,7 @@ AI-powered pipeline that automates the z-stream test lifecycle for **OpenShift D
 
 ## Architecture
 
-Hierarchical **LangGraph** pipeline — no CrewAI, no NATS, no swarm. Single framework, single mental model. LLM nodes run via **Claude Code CLI** (`claude --print`) by default, with **LiteLLM** as a fallback runtime for alternative providers.
+Hierarchical **LangGraph** pipeline — no CrewAI, no NATS, no swarm. Single framework, single mental model. AI nodes run via **Claude Code CLI** (`claude --print`). No LangChain, no LiteLLM in the hot path.
 
 The pipeline is **PR-driven**: Jira Inspector fetches remote links from each bug to find GitHub PR URLs, then the PR Analyzer fetches changed files from each PR via GitHub API. Test selection scores individual test functions (not directories) against PR file paths as the strongest relevance signal.
 
@@ -143,7 +143,7 @@ odf-zstream-agents/
 │   ├── config.py                # Loads env + config.yaml
 │   ├── models.py                # Pydantic: ChangeManifest, TestSelection, AnalysisReport, ...
 │   ├── state.py                 # TypedDict states with Annotated reducers
-│   └── agent_runner.py          # run_node() → Claude Code CLI or LiteLLM
+│   └── agent_runner.py          # run_node() → Claude Code CLI
 │
 ├── graph/                       # LangGraph pipeline + sub-graphs
 │   ├── pipeline.py              # Top-level orchestrator (6 stages)
@@ -203,8 +203,8 @@ jenkins:
   max_wait_hours: 6
 
 llm:
-  runtime: claude-code          # "claude-code" or "litellm"
-  default_model: sonnet         # claude-code: sonnet/opus/haiku. litellm: full model ID
+  runtime: claude-code          # Claude Code CLI
+  default_model: sonnet         # sonnet/opus/haiku
   opus_model: opus
   opus_nodes: [mark_matcher, root_cause]
   no_llm_nodes: [git_diff, jenkins_agent, classifier, notifier]
@@ -228,18 +228,13 @@ squad_mapping:
 
 The pipeline supports two LLM runtimes, controlled by `llm.runtime` in `config.yaml`:
 
-| Mode | Setting | Auth | When to Use |
-|------|---------|------|-------------|
-| **Claude Code CLI** (default) | `runtime: claude-code` | Uses `claude` CLI's own auth (no API key needed) | Default for all Claude-based runs. Agents get tool access (Read, Bash, WebSearch, etc.) via `--allowedTools` |
-| **LiteLLM** (fallback) | `runtime: litellm` | Requires `ANTHROPIC_API_KEY` (or other provider keys) | Use for GPT, Ollama, or other providers. Also auto-selected if `claude` CLI is not installed |
-
-Nodes call `run_node(prompt, node_name)` -- the runner selects the runtime and model automatically. In claude-code mode, per-node tool access is configured via `allowed_tools` in each node's call.
+All AI nodes use **Claude Code CLI** (`claude --print`). The CLI handles its own auth — no `ANTHROPIC_API_KEY` needed. Nodes call `run_node(prompt, node_name)` which spawns Claude with the right model and timeout.
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Only for `litellm` runtime | Not needed for claude-code mode (CLI handles its own auth) |
+| `ANTHROPIC_API_KEY` | No | Not needed — Claude Code CLI handles its own auth |
 | `JIRA_URL` | Yes | Jira Cloud instance URL |
 | `JIRA_EMAIL` | Yes | Jira account email |
 | `JIRA_API_TOKEN` | Yes | Jira API token |
@@ -258,7 +253,7 @@ Nodes call `run_node(prompt, node_name)` -- the runner selects the runtime and m
 | Component | Technology | Why |
 |-----------|-----------|-----|
 | Pipeline | LangGraph | Graph-based state machine with sub-graphs, fan-out/in, conditional edges |
-| Runtime | Claude Code CLI (default) / LiteLLM (fallback) | Claude Code gives agents tool access (Read, Bash, WebSearch); LiteLLM for GPT/Ollama/other providers |
+| AI Runtime | Claude Code CLI (`claude --print`) | Direct subprocess, no framework overhead. CLI handles auth and model routing |
 | API | FastAPI | Async, typed, auto-generated OpenAPI docs |
 | State | PostgreSQL | Pipeline checkpoints + historical results for regression detection |
 | CLI | Typer | Clean CLI with auto-help |
