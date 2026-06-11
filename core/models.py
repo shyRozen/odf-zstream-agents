@@ -58,6 +58,13 @@ class TestSelection(BaseModel):
     relevance_score: float
     reason: str
     existing_marks: list[str] = Field(default_factory=list)
+    component: str = ""
+
+
+def component_marker_name(base_mark: str, component: str) -> str:
+    """Build a per-component marker name from a base zstream marker and component."""
+    comp_safe = component.replace("-", "_").replace(".", "_").lower()
+    return f"{base_mark}_{comp_safe}"
 
 
 class GapDetail(BaseModel):

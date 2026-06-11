@@ -1,6 +1,6 @@
 # ODF Z-Stream Implementation Notes
 
-> Implementation record for ODF-ZStream-Multi-Agent-Plan-v2
+> Implementation record for [[ODF-ZStream-Multi-Agent-Plan-v2]]
 > Built: 2026-05-04
 
 ---
@@ -65,29 +65,32 @@ Pipeline Orchestrator (top-level StateGraph)
 └── pyproject.toml # Dependencies
 ```
 
-### Runtime Architecture Change
+### Runtime Architecture
 
-LLM nodes now run through a **dual-runtime** architecture via `core/agent_runner.py`:
+All AI nodes run through **Claude Code CLI** (`claude --print`) via `core/agent_runner.py`. No LangChain, no LiteLLM in the hot path. Each call spawns a Claude subprocess with the prompt via stdin.
 
-- **Default**: Claude Code CLI (`claude --print`). Each agent node gets configurable tool access via `--allowedTools` (Read, Bash, WebSearch, WebFetch). No `ANTHROPIC_API_KEY` needed — the CLI handles its own auth.
-- **Fallback**: LiteLLM. Selected via `llm.runtime: litellm` in config, or auto-selected if the `claude` CLI is not installed. Supports GPT, Ollama, and any LiteLLM-compatible provider.
+Key settings per call:
+- `start_new_session=True` — isolates from parent terminal
+- `TERM=dumb`, `NO_COLOR=1` — prevents escape sequences
+- Timeout: 180s default, 300s for Opus nodes
+- Model routing: `sonnet` for most nodes, `opus` for mark_matcher and root_cause
 
-Nodes call `run_node(prompt, node_name)` — runtime and model selection is automatic based on config. The 5 deterministic nodes (git_diff, jenkins_agent, classifier, notifier, merge fallback) still use no LLM/agent at all.
+Nodes call `run_node(prompt, node_name)` — model selection is automatic based on config. Deterministic nodes (classifier, notifier, merge fallback) use no AI at all.
 
-### Key Technical Decisions Made During Implementation
+### Key Technical Decisions
 
 | Decision | Why |
 |----------|-----|
-| Claude Code CLI as default runtime | Agents get tool access (Read, Bash, WebSearch) via `--allowedTools`. No API key management needed. Falls back to LiteLLM if CLI not found |
-| Unified `run_node()` API | Nodes don't know which runtime they're using. `run_node(prompt, node_name)` handles model routing, timeouts, and tool access automatically |
-| Plain functions + separate `_tool` wrappers | `@tool` decorator wraps functions in `StructuredTool` objects that aren't directly callable. Nodes call raw functions; `_tool` variants exist for future ReAct agent use |
-| JSON string returns from all tools | Tools return serialized JSON strings so both LLM agents and direct callers can consume them. Nodes parse with `json.loads()` |
-| Every LLM node has a deterministic fallback | If the LLM is unavailable (no API key, rate limit, error), nodes produce reasonable output using regex, heuristics, and templates |
-| `Annotated[list, add]` reducers for error lists | Errors from parallel sub-graph nodes get merged automatically by LangGraph's reducer system, not overwritten |
+| Claude Code CLI (not LangChain/LiteLLM) | Direct subprocess call, no framework overhead. CLI handles auth, tool access, model routing |
+| Unified `run_node()` API | Nodes don't know the runtime details. Handles model routing, timeouts, and error recovery |
+| Plain functions + separate `_tool` wrappers | `@tool` wraps in `StructuredTool` (not callable). Nodes call raw functions; `_tool` variants exist for potential future ReAct use |
+| JSON string returns from all tools | Tools return serialized JSON. Nodes parse with `json.loads()` |
+| Every AI node has a deterministic fallback | If Claude is unavailable, nodes use regex, heuristics, and templates |
+| `Annotated[list, add]` reducers for error lists | Errors from parallel sub-graph nodes merge automatically |
 
 ### Tools Implemented
 
-In claude-code mode, LLM nodes no longer call tool functions directly. Instead, they delegate to the Claude Code agent via `allowed_tools` — the agent reads files, runs shell commands, and searches the web as needed. The tool modules below are still used by deterministic nodes and as the LiteLLM-mode fallback.
+AI nodes delegate to Claude Code which can use Read, Bash, WebSearch. Tool modules below are used by deterministic nodes and provide the API wrappers.
 
 | Module | Functions | External Service |
 |--------|-----------|-----------------|
@@ -103,13 +106,88 @@ In claude-code mode, LLM nodes no longer call tool functions directly. Instead, 
 
 ### Per-Testcase Selection
 
-The pipeline selects individual test functions (e.g. `test_failover.py::TestFailover::test_failover`) instead of directories. Uses a pre-built test index (532 files, 1058 tests) stored in the `ocs-ci-codebase-map` repo (`test-index.json`), downloaded at pipeline startup. The index is built by `tools/ocs_ci_scanner.py`.
+The pipeline selects individual test functions (e.g. `test_failover.py::TestFailover::test_failover`) instead of directories. Uses per-version test indexes from the `ocs-ci-codebase-map` repo — each `release-X.Y` branch has its own `test-index.json` + full Obsidian vault. When running `zstream run 4.20.5`, the pipeline does a shallow single-branch clone (`git clone --depth 1 --branch release-4.20`) to download only the needed data (~1.5MB). See [[ODF-ZStream-Next-Steps#Step 10]] for the update script and version details.
 
 ### PR-Driven Test Selection
 
-Jira Inspector fetches remote links from each DFBUGS issue to extract GitHub PR URLs. The PR Analyzer node fetches actual changed files from each PR via GitHub API. Test scoring uses PR file paths as the strongest relevance signal (0.95). Component match alone scores 0.70; keyword overlap is needed for higher scores. A dynamic threshold cuts tests below 70% of the top score. Force-include guarantees at least one test per changed component.
+Jira Inspector fetches remote links from each DFBUGS issue to extract GitHub PR URLs. The PR Analyzer node fetches actual changed files from each PR via GitHub API. Test scoring uses PR file paths as the strongest relevance signal (0.95). Component match alone scores 0.70; keyword overlap is needed for higher scores. A dynamic threshold cuts tests below 70% of the top score.
+
+Force-include guarantees at least one test per changed component, using `component_test_mapping` directories (not substring matching) to determine coverage. This prevents false positives like `test_mcg_hpa.py` in `monitoring/` being counted as MCG coverage.
 
 JIRA_COMPONENT_MAP normalizes DFBUGS component names (e.g. "Multi-Cloud Object Gateway" to "mcg", "ceph-monitoring" to "monitoring", "odf-cli" to "odf-cli").
+
+### PR Builder
+
+Creates a branch from `release-X.Y` (not master), registers z-stream markers following ocs-ci conventions, and opens a PR targeting the release branch. Each run uses a timestamped branch name to avoid collisions. All commits include `Signed-off-by` for DCO compliance (configured via `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` in `.env`). PRs are labeled "Automatic AI Generated".
+
+**Per-component markers** (Pillar 2 optimization): each test gets a global marker (`zstream_4_18_1`) AND a component-specific marker (`zstream_4_18_1_ocs_operator`). This enables per-deployment test selection — each Jenkins deployment runs only the tests relevant to its fixes via `TEST_MARK_EXPRESSION`.
+
+Marker registration in the PR:
+1. `pytest.ini` — registers global + per-component markers for `--strict-markers`
+2. `marks.py` — adds marker variables for import (e.g. `zstream_4_18_1_mcg = pytest.mark.zstream_4_18_1_mcg`)
+3. Each test file — `github_add_marks_to_test()` applies all relevant marks in a single commit per file (avoids SHA conflicts)
+
+The `component` field on `TestSelection` (populated by mark_matcher from `dir_to_component` mapping) drives which component marker each test gets. Helper `component_marker_name()` in `core/models.py` normalizes component names to valid marker suffixes.
+
+### Topology Selector (Pillars 1+2 from [[Lane-C-ZStream-Optimization-Plan]])
+
+Uses a 152-config Jenkins deployment catalog extracted from `ocs4-jenkins/jobs/qe_ci_production_job_triggers.groovy`. Covers 7 platforms: vSphere (68 configs), AWS (54), Baremetal (14), Azure (7), IBM Cloud (4), GCP (3), RHV (2).
+
+**Platform priority** for bugs without a specific platform: `vsphere > ibmcloud > aws > baremetal > gcp > azure > rhv`. Platform-agnostic bugs join an existing deployment (saving clusters) rather than creating a new one. Only when no deployment exists does the priority create a new one.
+
+**Install type default**: UPI when the bug doesn't specify (most configs support UPI).
+
+Flow:
+1. Fetches Jira bug descriptions, parses DFBUGS template fields for platform/deployment type
+2. Skips CVE bugs (no platform info in their descriptions, saves ~20 API calls)
+3. AI selects the best matching `CLUSTER_CONF` from the catalog per fix
+4. Falls back to two-pass heuristic if AI fails: specific-platform bugs first, then agnostic bugs join existing deployments
+5. Groups fixes by deployment config
+6. **Composes per-deployment `TEST_MARK_EXPRESSION`** from component markers of each deployment's fixes (e.g. `zstream_4_18_1_mcg or zstream_4_18_1_csi`)
+7. Shows test count per deployment
+8. Adds deployment plan as formatted Markdown comment on the PR
+
+All specs set `RUN_TEARDOWN=false` and `OCS_CI_REPOSITORY_BRANCH=pr/<number>|release-X.Y` so Jenkins uses the z-stream PR before it's merged.
+
+### Jenkins Deployment API
+
+`jenkins_tools.py` provides full Jenkins integration:
+- `jenkins_trigger_build(job, params)` — trigger a parameterized build
+- `jenkins_queue_to_build(job, queue_id)` — resolve queue item to build number
+- `jenkins_deploy(spec)` — trigger one deployment from a topology spec
+- `jenkins_deploy_all(specs)` — trigger all topologies from topology selector output
+- `jenkins_get_build_status/test_report/console_log` — poll and collect results
+
+### PR Analyzer Resilience
+
+- Skips own z-stream PRs from previous runs (detected by title containing "z-stream"/"zstream"/"test enablement")
+- Shows per-PR progress: `[1/29] noobaa/noobaa-core/pull/9676`
+- If AI analysis fails on a PR, prints error and continues with basic summary
+- External repos (NaturalIntelligence/fast-xml-parser, digitalbazaar/forge) are processed normally
+
+### Process Stability
+
+- Claude CLI subprocesses run with `start_new_session=True`, `TERM=dumb`, `NO_COLOR=1` to prevent terminal interference
+- Default AI timeout: 180s (configurable in `config.yaml`)
+- SIGTERM/SIGHUP/SIGPIPE signals are caught and ignored — something sends SIGTERM during long runs (~5 minutes in), but the pipeline continues
+- Large z-streams (37+ bugs, 29+ PRs) take 8-12 minutes total
+- `run_zstream.sh` wrapper script available for bash-level signal trapping + logging
+
+### CLI Modes
+
+- `--collect-only` — stops after test selection (inspect + map stages)
+- `--stop-after-pr` — stops after PR is created (inspect + map + PR stages)
+- `--plan-deploy` — classify fixes by topology, print Jenkins API calls (dry run)
+- `--deploy` — classify fixes by topology AND trigger Jenkins deployments
+- Full run — all 6 stages including Jenkins + analysis
+
+### Jira Integration
+
+Beyond the pipeline, the tools support:
+- `jira_search(version)` — search DFBUGS by fixVersion
+- `jira_get_issue(key)` — get full issue details including description
+- Creating issues in any project (used for OCSQE-5130)
+- Transitioning issues (used to mark ODFE-133 as Obsolete)
 
 ### Errata Disabled
 
@@ -126,26 +204,17 @@ The errata parser returns empty due to insufficient API access. The pipeline pro
 ### Verification
 
 ```bash
-# Pipeline compiles
-python -c "from graph.pipeline import build_pipeline; build_pipeline()"
+# Small z-stream (3 bugs, ~5 min)
+zstream run 4.18.1 --stop-after-pr --plan-deploy --max-tests 30
 
-# All modules import
-python -c "from tools import jira_tools, errata_tools, git_tools, ocs_ci_tools, github_tools, jenkins_tools, slack_tools, db_tools"
+# Large z-stream (37 bugs, ~10 min)
+timeout 900 zstream run 4.20.14 --stop-after-pr --plan-deploy --max-tests 60
 
-# Agent runner imports and detects runtime
-python -c "from core.agent_runner import RUNTIME; print(f'Runtime: {RUNTIME}')"
+# Collect-only (no PR, no deploy plan)
+zstream run 4.16.13 --collect-only --max-tests 30
 
-# Verify claude CLI is available (for claude-code runtime)
-claude --version
-
-# End-to-end run (degrades gracefully without API keys)
-zstream run 4.16.2
-
-# Collect-only (inspect + map, show selected tests with scores)
-zstream run 4.16.2 --collect-only
-
-# Override max tests (default 50)
-zstream run 4.16.2 --max-tests 30
+# Dry run (show initial state only)
+zstream run 4.16.2 --dry-run
 
 # Dry run (shows initial state)
 zstream run 4.16.2 --dry-run

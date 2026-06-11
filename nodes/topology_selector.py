@@ -13,12 +13,14 @@ import re
 from pathlib import Path
 
 from core.agent_runner import run_node
-from core.models import ChangeManifest
+from core.models import ChangeManifest, component_marker_name
 from core.state import PipelineState
 
 logger = logging.getLogger(__name__)
 
 CATALOG_PATH = Path(__file__).resolve().parent.parent / "jenkins_deployment_catalog.json"
+
+PLATFORM_PRIORITY = ["vsphere", "ibmcloud", "aws", "baremetal", "gcp", "azure", "rhv"]
 
 DEPLOYMENT_TYPE_MAP = {
     "internal": "standard",
@@ -72,11 +74,38 @@ def topology_selector(state: PipelineState) -> dict:
     for fix_id, job_name in selections.items():
         job_groups.setdefault(job_name, []).append(fix_id)
 
+    # Map fix_id -> component for per-deployment marker composition
+    fix_to_component: dict[str, str] = {}
+    for change in manifest.changes:
+        fix_to_component[change.id] = change.component
+
     # Build deployment specs
     catalog_by_job = {e["job"]: e for e in catalog}
     specs = []
     for job_name, fix_ids in job_groups.items():
         entry = catalog_by_job.get(job_name, {})
+
+        # Compose per-deployment TEST_MARK_EXPRESSION from component markers
+        deployment_components = set()
+        for fix_id in fix_ids:
+            comp = fix_to_component.get(fix_id, "")
+            if comp:
+                deployment_components.add(comp)
+
+        if deployment_components:
+            comp_markers = sorted(
+                component_marker_name(mark_name, c) for c in deployment_components
+            )
+            test_mark_expr = " or ".join(comp_markers)
+        else:
+            test_mark_expr = mark_name
+
+        # Count tests matching this deployment's components
+        test_count = sum(
+            1 for t in selected_tests
+            if t.component and t.component in deployment_components
+        )
+
         specs.append({
             "job_name": job_name,
             "platform": entry.get("platform", "unknown"),
@@ -85,11 +114,12 @@ def topology_selector(state: PipelineState) -> dict:
             "cluster_conf": entry.get("cluster_conf", ""),
             "fix_ids": fix_ids,
             "fix_count": len(fix_ids),
+            "test_count": test_count,
             "jenkins_params": {
                 "OCS_VERSION": ocs_version,
                 "OCP_VERSION": ocs_version,
                 "CLUSTER_CONF": entry.get("cluster_conf", ""),
-                "TEST_MARK_EXPRESSION": mark_name,
+                "TEST_MARK_EXPRESSION": test_mark_expr,
                 "TEST_PATH": "tests/",
                 "OCS_CI_REPOSITORY_BRANCH": (
                     f"pr/{pr_number}|release-{ocs_version}"
@@ -300,16 +330,18 @@ def _select_deployments_with_ai(
         f"type, and special requirements from the Jira bug.\n\n"
         f"Rules:\n"
         f"- Match platform first (aws/vsphere/baremetal/azure/gcp)\n"
-        f"- Match install type (ipi/upi)\n"
+        f"- Match install type (ipi/upi). Prefer UPI when install type "
+        f"is not specified or is unknown\n"
         f"- Match special requirements (fips, encryption, kms, "
         f"external, lso, proxy, disconnected, ipv6, etc.)\n"
-        f"- For 'all platforms' or 'platform agnostic', use "
-        f"'qe-trigger-aws-ipi-3az-rhcos-3m-3w' as default\n"
-        f"- For 'internal' deployment, use standard IPI\n"
+        f"- For 'all platforms' or 'platform agnostic', JOIN an existing "
+        f"deployment from another bug instead of creating a new one. "
+        f"If no other deployment exists, pick from this priority: "
+        f"{', '.join(PLATFORM_PRIORITY)}.\n"
+        f"- For 'internal' deployment, use standard UPI when available\n"
         f"- For 'external' deployment, use an external job\n"
-        f"- For 'provider/client', use "
-        f"'qe-trigger-aws-ipi-3az-rhcos-3m-3w' (provider-client "
-        f"jobs are in a separate folder)\n"
+        f"- For 'provider/client', use the top priority platform "
+        f"(vsphere IPI preferred, then ibmcloud, then aws)\n"
         f"- When uncertain, prefer the simplest matching config\n\n"
         f"Available deployment configs:\n"
         + "\n".join(catalog_summary)
@@ -342,7 +374,13 @@ def _select_deployments_with_ai(
 
 
 def _select_deployments_heuristic(manifest, fix_details, catalog):
-    """Fallback: match on platform + install type."""
+    """Fallback: match on platform + install type.
+
+    Two passes:
+    1. Assign bugs with a specific platform to their matching deployment.
+    2. Assign platform-agnostic bugs to an existing deployment (preferring
+       higher-priority platforms). Only create a new deployment if none exist.
+    """
     catalog_by_key = {}
     for e in catalog:
         key = f"{e['platform']}_{e['install']}"
@@ -350,17 +388,46 @@ def _select_deployments_heuristic(manifest, fix_details, catalog):
             catalog_by_key.setdefault(key, e["job"])
 
     selections = {}
-    default = "qe-trigger-aws-ipi-3az-rhcos-3m-3w"
+    deferred = []
+
+    # Pass 1: bugs with a specific platform
     for change in manifest.changes:
         detail = fix_details.get(change.id, {})
-        platform = detail.get("platform", "aws")
+        platform = detail.get("platform", "unknown")
         install = detail.get("install_type", "ipi")
-        if platform in ("all", "unknown"):
-            platform = "aws"
         if install in ("any", "unknown"):
-            install = "ipi"
-        key = f"{platform}_{install}"
-        selections[change.id] = catalog_by_key.get(key, default)
+            install = "upi"
+
+        if platform in ("all", "unknown"):
+            deferred.append(change.id)
+        else:
+            key = f"{platform}_{install}"
+            fallback = catalog_by_key.get(f"{PLATFORM_PRIORITY[0]}_upi", "")
+            selections[change.id] = catalog_by_key.get(key, fallback)
+
+    # Pass 2: platform-agnostic bugs join an existing deployment
+    existing_jobs = set(selections.values())
+    for fix_id in deferred:
+        if existing_jobs:
+            # Pick the existing deployment on the highest-priority platform
+            best = None
+            for p in PLATFORM_PRIORITY:
+                for job in existing_jobs:
+                    if p in job:
+                        best = job
+                        break
+                if best:
+                    break
+            selections[fix_id] = best or next(iter(existing_jobs))
+        else:
+            # No existing deployments — create one using priority
+            for p in PLATFORM_PRIORITY:
+                job = catalog_by_key.get(f"{p}_upi") or catalog_by_key.get(f"{p}_ipi")
+                if job:
+                    selections[fix_id] = job
+                    existing_jobs.add(job)
+                    break
+
     return selections
 
 
@@ -399,6 +466,9 @@ def _print_deployment_plan(specs: list[dict], version: str):
         print(f"      Features:  {features}")
         print(f"      Config:    {spec['cluster_conf']}")
         print(f"      Fixes:     {', '.join(spec['fix_ids'])}")
+        print(f"      Tests:     {spec.get('test_count', '?')}")
+        expr = spec["jenkins_params"].get("TEST_MARK_EXPRESSION", "?")
+        print(f"      Markers:   {expr}")
         print(f"\n      Jenkins API call:")
         params = spec["jenkins_params"]
         print(
@@ -410,9 +480,10 @@ def _print_deployment_plan(specs: list[dict], version: str):
         print()
 
     print(f"{'='*60}")
+    total_tests = sum(s.get('test_count', 0) for s in specs)
     print(
-        f"  Total: {sum(s['fix_count'] for s in specs)} fixes "
-        f"across {len(specs)} deployment(s)"
+        f"  Total: {sum(s['fix_count'] for s in specs)} fixes, "
+        f"{total_tests} tests across {len(specs)} deployment(s)"
     )
     print(
         f"  RUN_TEARDOWN=false -- clusters kept alive "
@@ -446,6 +517,8 @@ def _format_deployment_comment(specs: list[dict], version: str) -> str:
             f"| **Features** | {features} |",
             f"| **Config** | `{spec['cluster_conf']}` |",
             f"| **Fixes** | {', '.join(spec['fix_ids'])} |",
+            f"| **Tests** | {spec.get('test_count', '?')} |",
+            f"| **Markers** | `{spec['jenkins_params'].get('TEST_MARK_EXPRESSION', '?')}` |",
             "",
             "<details>",
             "<summary>Jenkins parameters</summary>",

@@ -135,6 +135,7 @@ def mark_matcher(state: MapState) -> dict:
                     relevance_score=round(score, 2),
                     reason=_build_reason(func, comp, score),
                     existing_marks=[squad] if squad else [],
+                    component=comp,
                 )
             )
 

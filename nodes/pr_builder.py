@@ -34,11 +34,12 @@ def pr_builder(state: PipelineState) -> dict:
     try:
         from tools.github_tools import (
             github_create_branch,
-            github_add_mark_to_test,
+            github_add_marks_to_test,
             github_create_pr,
             github_register_marker,
             github_register_mark_in_marks_py,
         )
+        from core.models import component_marker_name
     except ImportError:
         logger.warning("github_tools not available, skipping PR creation")
         return {
@@ -68,39 +69,57 @@ def pr_builder(state: PipelineState) -> dict:
         except Exception as e:
             logger.warning("Branch creation failed (may already exist): %s", e)
 
-        # Step 2: Register the marker in pytest.ini and marks.py
-        logger.info("Registering marker: %s", mark_name)
-        try:
-            github_register_marker(
-                branch=branch_name,
-                mark_name=mark_name,
-                description=f"z-stream {version} test enablement",
-            )
-        except Exception as e:
-            logger.warning("Failed to register marker in pytest.ini: %s", e)
+        # Step 2: Build per-component marker names
+        comp_markers: dict[str, str] = {}
+        for test in selected_tests:
+            if test.component and test.component not in comp_markers:
+                comp_markers[test.component] = component_marker_name(mark_name, test.component)
 
-        try:
-            github_register_mark_in_marks_py(
-                branch=branch_name,
-                mark_name=mark_name,
-            )
-        except Exception as e:
-            logger.warning("Failed to register marker in marks.py: %s", e)
+        # Step 3: Register all markers (global + per-component) in pytest.ini and marks.py
+        all_markers = {mark_name: f"z-stream {version} test enablement"}
+        for comp, comp_mark in comp_markers.items():
+            all_markers[comp_mark] = f"z-stream {version} {comp} component tests"
 
-        # Step 3: Add marks to each selected test
+        for m_name, m_desc in all_markers.items():
+            logger.info("Registering marker: %s", m_name)
+            try:
+                github_register_marker(
+                    branch=branch_name,
+                    mark_name=m_name,
+                    description=m_desc,
+                )
+            except Exception as e:
+                logger.warning("Failed to register marker %s in pytest.ini: %s", m_name, e)
+            try:
+                github_register_mark_in_marks_py(
+                    branch=branch_name,
+                    mark_name=m_name,
+                )
+            except Exception as e:
+                logger.warning("Failed to register marker %s in marks.py: %s", m_name, e)
+
+        # Step 4: Add marks to each selected test (grouped by file)
+        from collections import defaultdict
+
+        file_marks: dict[str, set[str]] = defaultdict(set)
+        for test in selected_tests:
+            file_marks[test.file_path].add(mark_name)
+            if test.component and test.component in comp_markers:
+                file_marks[test.file_path].add(comp_markers[test.component])
+
         marked_count = 0
         mark_errors = []
-        for test in selected_tests:
+        for file_path, marks in file_marks.items():
             try:
-                github_add_mark_to_test(
+                github_add_marks_to_test(
                     branch=branch_name,
-                    file_path=test.file_path,
-                    mark_name=mark_name,
+                    file_path=file_path,
+                    mark_names=sorted(marks),
                 )
                 marked_count += 1
             except Exception as e:
-                logger.warning("Failed to add mark to %s: %s", test.test_node_id, e)
-                mark_errors.append(f"{test.test_node_id}: {e}")
+                logger.warning("Failed to add marks to %s: %s", file_path, e)
+                mark_errors.append(f"{file_path}: {e}")
 
         if marked_count == 0:
             logger.error("Failed to mark any tests, aborting PR creation")

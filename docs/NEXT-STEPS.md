@@ -1,13 +1,37 @@
 # ODF Z-Stream — Next Steps
 
 > Roadmap for taking the pipeline from working prototype to production.
-> Follows from  and .
+> Follows from [[ODF-ZStream-Multi-Agent-Plan-v2]] and [[ODF-ZStream-Implementation-Notes]].
 
 ---
 
 ## Current State
 
-The pipeline runs end-to-end (`zstream run 4.16.2`) with all 14 nodes, 3 sub-graphs, and 23 tool functions implemented. Without API credentials, it degrades gracefully. The architecture is sound — what remains is integration, hardening, and deployment.
+The pipeline runs end-to-end with real Jira/GitHub data. Tested on 4.16.13 (3 bugs), 4.18.1 (3 bugs, 2 deployments), and 4.20.14 (37 bugs, 29 PRs, 62 tests, 8 deployments). Creates PRs with per-component markers, posts deployment plan with per-deployment `TEST_MARK_EXPRESSION` as PR comment, selects Jenkins configs from 152-config catalog across 7 platforms. See [[ODF-ZStream-Implementation-Notes]] for full details.
+
+---
+
+## Recently Completed
+
+### A. Component per test in output — DONE
+
+Test output table now includes a `Component` column showing which component each test covers. The `TestSelection` model has a `component` field populated by mark_matcher from the `dir_to_component` mapping.
+
+### B. Per-deployment test selection — DONE
+
+Each deployment now gets its own `TEST_MARK_EXPRESSION` composed from component markers:
+- Global marker (`zstream_4_18_1`) applied to all tests (backward compatible)
+- Per-component markers (`zstream_4_18_1_mcg`, `zstream_4_18_1_ocs_operator`) applied per test
+- Each deployment's `TEST_MARK_EXPRESSION` = OR of its fixes' component markers
+- `github_add_marks_to_test()` applies multiple marks per file in a single commit
+- Deployment plan shows test count per deployment
+
+### C. Platform priority and deployment consolidation — DONE
+
+- Platform priority for agnostic bugs: vsphere > ibmcloud > aws > baremetal > gcp > azure > rhv
+- Platform-agnostic bugs join existing deployments instead of creating new ones (saves clusters)
+- Default install type: UPI when not specified
+- Two-pass heuristic: specific-platform bugs first, then agnostic bugs join
 
 ---
 
@@ -36,7 +60,7 @@ python -c "from tools.jenkins_tools import jenkins_get_build_status; print(jenki
 
 ## Step 2: First Real Z-Stream Run
 
-**Priority**: High -- **Status**: Working with `--collect-only`
+**Priority**: High -- **Status**: Working with `--collect-only`, `--stop-after-pr`, `--plan-deploy`, `--deploy`
 **Why**: Validates inspect + map stages with real data.
 
 The `--collect-only` flag runs inspect + map only, showing selected tests with scores. Example:
@@ -240,23 +264,27 @@ LANGCHAIN_PROJECT=odf-zstream
 
 ## Step 10: Per-Version Test Indexing
 
-**Priority**: High (blocking accurate test selection)
-**Why**: Each ODF version (4.16, 4.17, ..., 4.21) has different tests on its release branch. The current index is built from one branch — test selection for older/newer versions may miss or include wrong tests.
+**Priority**: High (blocking accurate test selection) -- **Status**: DONE
 
-**ocs-ci release branches**: `upstream/release-4.10` through `upstream/release-4.21`
+**Implementation**: Branch-per-version in the [[OCS-CI codebase map]] repo. Each `release-X.Y` branch has a full Obsidian vault + `test-index.json` specific to that ocs-ci release branch.
 
-**Plan**: Build a pure Python update script in the OCS-CI codebase map repo that:
-1. Clones/pulls ocs-ci
-2. Checks out each `release-X.Y` branch
-3. Runs AST scanner → produces `test-index-X.Y.json` per version
-4. Regenerates Obsidian notes if test directories changed
-5. Commits and pushes to map repo
+**Update script**: `scripts/update_map.py` in the map repo (pure stdlib Python, no pip deps):
+```bash
+# Scan all versions
+python scripts/update_map.py --ocs-ci-path ~/codcod/new-ocs-ci/ocs-ci --all
 
-**Trigger options**:
+# Scan single version
+python scripts/update_map.py --ocs-ci-path ~/codcod/new-ocs-ci/ocs-ci --version 4.20
+
+# Without pushing
+python scripts/update_map.py --ocs-ci-path ~/codcod/new-ocs-ci/ocs-ci --all --no-push
+```
+
+**Versions indexed**: 4.10 (340 files, 623 tests) through 4.21 (528 files, 1050 tests). Big restructuring at 4.14→4.15 (+376/-349 files).
+
+**Pipeline integration**: `zstream run 4.20.5` → `ensure_map(version="4.20.5")` does a shallow clone of just the `release-4.20` branch (`git clone --depth 1 --branch release-4.20`, ~1.5MB) → `load_index()` reads `test-index.json`. Fresh download every run, no cached state.
+
+**Trigger options** (future):
 - GitHub Action on ocs-ci merge to `release-*` branch
 - Cron job (daily/weekly)
 - Manual: `python scripts/update_map.py --version 4.20`
-
-**No AI needed** — scanning is pure Python AST parsing. The scanner already exists at `tools/ocs_ci_scanner.py` in the zstream-agents repo.
-
-**Pipeline change**: `zstream run 4.20.5` should load `test-index-4.20.json` instead of `test-index.json`.

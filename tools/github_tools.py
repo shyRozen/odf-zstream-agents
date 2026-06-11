@@ -223,6 +223,148 @@ def github_add_mark_to_test(branch: str, file_path: str, mark_name: str) -> str:
         return json.dumps({"error": f"Failed to add marks: {str(exc)}"})
 
 
+def github_add_marks_to_test(branch: str, file_path: str, mark_names: list[str]) -> str:
+    """Add multiple pytest marks to test classes/functions in a single commit.
+
+    Same conventions as github_add_mark_to_test but handles multiple marks
+    at once, avoiding SHA conflicts from sequential single-mark commits.
+    """
+    repo, error = _get_repo()
+    if error:
+        return error
+
+    try:
+        try:
+            file_content = repo.get_contents(file_path, ref=branch)
+        except Exception:
+            return json.dumps(
+                {"error": f"File '{file_path}' not found on branch '{branch}'"}
+            )
+
+        content = file_content.decoded_content.decode("utf-8")
+
+        # Filter out marks already present
+        new_marks = [m for m in mark_names if m not in content]
+        if not new_marks:
+            return json.dumps(
+                {"message": "All marks already present", "file": file_path}
+            )
+
+        lines = content.split("\n")
+
+        # Step 1: Add imports for all new marks
+        marks_import = "ocs_ci.framework.pytest_customization.marks"
+        import_added = False
+        new_lines = []
+        in_marks_import = False
+        for line in lines:
+            if not import_added and marks_import in line and "import" in line:
+                in_marks_import = True
+                new_lines.append(line)
+                if "(" not in line:
+                    new_lines[-1] = f"{line.rstrip()}, {', '.join(new_marks)}"
+                    import_added = True
+                    in_marks_import = False
+                continue
+            if in_marks_import:
+                if line.strip() == ")":
+                    for m in new_marks:
+                        new_lines.append(f"    {m},")
+                    new_lines.append(line)
+                    import_added = True
+                    in_marks_import = False
+                    continue
+            new_lines.append(line)
+
+        if not import_added:
+            insert_idx = 0
+            for i, line in enumerate(new_lines):
+                if line.startswith("import ") or line.startswith("from "):
+                    insert_idx = i + 1
+                    while insert_idx < len(new_lines) and (
+                        new_lines[insert_idx].startswith("    ")
+                        or new_lines[insert_idx].strip() == ")"
+                    ):
+                        insert_idx += 1
+            new_lines.insert(
+                insert_idx,
+                f"from {marks_import} import {', '.join(new_marks)}",
+            )
+
+        lines = new_lines
+
+        # Step 2: Add decorators for all new marks
+        modified_lines = []
+        marks_added = 0
+
+        for i, line in enumerate(lines):
+            stripped = line.lstrip()
+            indent = len(line) - len(stripped)
+
+            if stripped.startswith("class ") and indent == 0:
+                has_test_methods = any(
+                    l.lstrip().startswith("def test_")
+                    for l in lines[i + 1 : min(i + 200, len(lines))]
+                    if l.startswith("    ")
+                )
+                if has_test_methods:
+                    for m in new_marks:
+                        already = any(
+                            m in lines[j]
+                            for j in range(max(0, i - 10), i)
+                            if lines[j].lstrip().startswith("@")
+                        )
+                        if not already:
+                            modified_lines.append(f"@{m}")
+                            marks_added += 1
+
+            elif stripped.startswith("def test_") and indent == 0:
+                for m in new_marks:
+                    already = any(
+                        m in lines[j]
+                        for j in range(max(0, i - 10), i)
+                        if lines[j].lstrip().startswith("@")
+                    )
+                    if not already:
+                        modified_lines.append(f"@{m}")
+                        marks_added += 1
+
+            modified_lines.append(line)
+
+        if marks_added == 0:
+            return json.dumps(
+                {
+                    "message": f"No test classes/functions found in {file_path}",
+                    "file": file_path,
+                }
+            )
+
+        new_content = "\n".join(modified_lines)
+        marks_str = ", @".join(new_marks)
+        commit_message = _signed_msg(f"Add @{marks_str} to {file_path}")
+        result = repo.update_file(
+            path=file_path,
+            message=commit_message,
+            content=new_content,
+            sha=file_content.sha,
+            branch=branch,
+        )
+
+        return json.dumps(
+            {
+                "file": file_path,
+                "branch": branch,
+                "marks_added": marks_added,
+                "mark_names": new_marks,
+                "commit_sha": result["commit"].sha,
+            },
+            indent=2,
+        )
+
+    except Exception as exc:
+        return json.dumps({"error": f"Failed to add marks: {str(exc)}"})
+
+
 def github_create_pr(branch: str, title: str, body: str, base_branch: str = "master") -> str:
     """Create a pull request in the ocs-ci repository.
 

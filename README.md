@@ -88,8 +88,8 @@ docker compose up -d
 | Stage | Pattern | Nodes | What it Does |
 |-------|---------|-------|-------------|
 | **1. Inspect** | Fan-out → Fan-in | 4 | Query Jira (+ PR URLs from remote links), fetch PR changed files from GitHub, merge into Change Manifest. Errata disabled |
-| **2. Map Tests** | Sequential + retry | 3 | Map changes to individual test functions using per-version test index (downloaded from [ocs-ci-codebase-map](https://github.com/shyRozen/ocs-ci-codebase-map) `release-X.Y` branch), score relevance using PR file paths + components + keywords, validate coverage |
-| **3. PR Builder** | Single node | 1 | Create branch, add `@pytest.mark.zstream_{ver}` to tests, open PR |
+| **2. Map Tests** | Sequential + retry | 3 | Map changes to individual test functions (with component tagging) using per-version test index (downloaded from [ocs-ci-codebase-map](https://github.com/shyRozen/ocs-ci-codebase-map) `release-X.Y` branch), score relevance using PR file paths + components + keywords, validate coverage |
+| **3. PR Builder** | Single node | 1 | Create branch, add global + per-component markers to tests, open PR |
 | **4. Jenkins** | Single node + poll | 1 | Trigger `qe-deploy-ocs-cluster-prod`, poll until complete, fetch results |
 | **5. Analyze** | DAG | 4 | Classify pass/fail, root cause failures, detect regressions, generate report |
 | **6. Notify** | Single node | 1 | Post to Slack, comment on PR, file Jira bugs |
