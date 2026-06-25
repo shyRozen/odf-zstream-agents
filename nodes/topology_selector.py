@@ -511,10 +511,14 @@ def _print_deployment_plan(specs: list[dict], version: str, fix_to_component: di
         print()
 
     print(f"{'='*60}")
-    total_tests = sum(s.get('test_count', 0) for s in specs)
+    unique_tests = set()
+    for s in specs:
+        for tests in s.get("fix_tests_map", {}).values():
+            for t in tests:
+                unique_tests.add(t.test_node_id)
     print(
         f"  Total: {sum(s['fix_count'] for s in specs)} fixes, "
-        f"{total_tests} tests across {len(specs)} deployment(s)"
+        f"{len(unique_tests)} unique tests across {len(specs)} deployment(s)"
     )
     print(
         f"  RUN_TEARDOWN=false -- clusters kept alive "
