@@ -3,8 +3,11 @@ from functools import lru_cache
 
 try:
     from langchain_litellm import ChatLiteLLM
-except ImportError:
-    from langchain_community.chat_models import ChatLiteLLM
+except Exception:
+    try:
+        from langchain_community.chat_models import ChatLiteLLM
+    except Exception:
+        ChatLiteLLM = None
 
 from core import config
 

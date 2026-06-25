@@ -137,10 +137,11 @@ def pr_builder(state: PipelineState) -> dict:
             }
 
         # Step 3: Generate PR description
-        pr_body = _generate_pr_description(manifest, selected_tests, version, marked_count)
+        test_count = len(selected_tests)
+        pr_body = _generate_pr_description(manifest, selected_tests, version, test_count)
 
         # Step 4: Create the PR
-        pr_title = f"[z-stream {version}] Enable {marked_count} tests for validation"
+        pr_title = f"[z-stream {version}] Enable {test_count} tests across {marked_count} files for validation"
         logger.info("Creating PR: %s", pr_title)
 
         pr_result = github_create_pr(
