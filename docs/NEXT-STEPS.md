@@ -33,6 +33,31 @@ Each deployment now gets its own `TEST_MARK_EXPRESSION` composed from component 
 - Default install type: UPI when not specified
 - Two-pass heuristic: specific-platform bugs first, then agnostic bugs join
 
+### D. Component classification in test index — DONE
+
+- `update_map.py` classifies each test file into a component (3-tier: directory → filename → keywords)
+- Splits `z_cluster/` catch-all into ocs-operator (26), rook (16), odf-operator (5), must-gather (3), mcg (1)
+- `component` field stored in `test-index.json`, read by mark_matcher at runtime
+- All 12 version branches (4.10–4.21) regenerated and pushed
+
+### E. Deploy-only verification tracking — DONE
+
+- Bugs with 0 matching tests classified as "deploy-only" (verified by successful deployment)
+- Deploy-only bugs join existing deployments to save clusters
+- `RUN_TEST=false` when deployment has no tests
+- Per-fix output shows component, verification type, and actual test functions (Class::method)
+
+### F. Per-fix test function listing — DONE
+
+- Deployment plan shows actual test functions per fix (e.g. `TestBucketNotifications::test_multi_notif_event_types`)
+- Top 5 tests listed per fix, rest collapsed with `... +N more`
+- Deploy-only fixes show `○ deploy-only`
+
+### G. Marker name sanitization — DONE
+
+- `component_marker_name()` strips all non-alphanumeric chars (fixes `red-hat-storage/odf-cli` → `red_hat_storage_odf_cli`)
+- Prevents SyntaxError in marks.py from invalid Python identifiers
+
 ---
 
 ## Step 1: Connect Real Credentials

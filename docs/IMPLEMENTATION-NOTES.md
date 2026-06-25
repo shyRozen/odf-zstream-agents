@@ -149,6 +149,31 @@ Flow:
 
 All specs set `RUN_TEARDOWN=false` and `OCS_CI_REPOSITORY_BRANCH=pr/<number>|release-X.Y` so Jenkins uses the z-stream PR before it's merged.
 
+### Component Classification in Test Index
+
+The `update_map.py` script in the map repo classifies each test file into a component using a 3-tier heuristic:
+1. **Directory match** — specific dirs like `object/mcg/` → `mcg`, `pv/` → `ceph-csi`
+2. **Filename patterns** — `test_must_gather*` → `must-gather`, `test_hugepages*` → `odf-operator`, `test_rook_ceph*` → `rook`
+3. **Keyword signals** — `noobaa`/`bucket` → `mcg`, `osd`/`mon`/`mds` → `rook`, `storagecluster` → `ocs-operator`
+
+This splits the catch-all `z_cluster/` directory into proper components: ocs-operator (26 files), rook (16), odf-operator (5), must-gather (3), mcg (1). The `component` field is stored per-file in `test-index.json` and read by mark_matcher at runtime — no more reliance on broad directory mappings in config.yaml.
+
+### Deploy-Only Verification
+
+Bugs with 0 matching tests are classified as "deploy-only" — verified by successful cluster deployment rather than test execution. Deploy-only bugs:
+- Join existing deployments to save clusters (same consolidation as platform-agnostic bugs)
+- Set `RUN_TEST=false` when a deployment has no tests at all
+- Show `○ deploy-only` in the CLI output and `🔧 deploy-verified` in PR comments
+
+The deployment plan shows per-fix detail: bug ID, component, verification type, and actual test functions (`TestClass::test_method`) for test-verified fixes.
+
+### Deployment Plan Output
+
+Each deployment now shows:
+- Per-fix: component, verification type (test/deploy-only), matching test functions (top 5 + count)
+- Per-deployment: total test count, `TEST_MARK_EXPRESSION`, `RUN_TEST` flag
+- Summary: total fixes, total tests, number of deployments
+
 ### Jenkins Deployment API
 
 `jenkins_tools.py` provides full Jenkins integration:
