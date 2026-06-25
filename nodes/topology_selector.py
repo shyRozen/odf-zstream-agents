@@ -106,14 +106,14 @@ def topology_selector(state: PipelineState) -> dict:
             if t.component and t.component in deployment_components
         )
 
-        # Classify each fix as test-verified or deploy-verified
+        # Classify each fix and collect its matching tests
         fix_verification = {}
+        fix_tests_map = {}
         for fix_id in fix_ids:
             comp = fix_to_component.get(fix_id, "")
-            fix_tests = sum(
-                1 for t in selected_tests if t.component == comp
-            ) if comp else 0
-            fix_verification[fix_id] = "test" if fix_tests > 0 else "deploy"
+            matching = [t for t in selected_tests if t.component == comp] if comp else []
+            fix_verification[fix_id] = "test" if matching else "deploy"
+            fix_tests_map[fix_id] = matching
 
         has_tests = test_count > 0
 
@@ -127,6 +127,7 @@ def topology_selector(state: PipelineState) -> dict:
             "fix_count": len(fix_ids),
             "test_count": test_count,
             "fix_verification": fix_verification,
+            "fix_tests_map": fix_tests_map,
             "jenkins_params": {
                 "OCS_VERSION": ocs_version,
                 "OCP_VERSION": ocs_version,
@@ -148,7 +149,7 @@ def topology_selector(state: PipelineState) -> dict:
             },
         })
 
-    _print_deployment_plan(specs, version)
+    _print_deployment_plan(specs, version, fix_to_component)
     return {"deployment_specs": specs}
 
 
@@ -465,7 +466,8 @@ def _print_jira_analysis(fix_details: dict):
         print()
 
 
-def _print_deployment_plan(specs: list[dict], version: str):
+def _print_deployment_plan(specs: list[dict], version: str, fix_to_component: dict | None = None):
+    fix_to_component = fix_to_component or {}
     print(f"{'='*60}")
     print(f"  DEPLOYMENT PLAN -- z-stream {version}")
     print(f"{'='*60}")
@@ -478,10 +480,20 @@ def _print_deployment_plan(specs: list[dict], version: str):
         print(f"      Features:  {features}")
         print(f"      Config:    {spec['cluster_conf']}")
         fix_ver = spec.get("fix_verification", {})
+        fix_tests = spec.get("fix_tests_map", {})
         for fix_id in spec["fix_ids"]:
             vtype = fix_ver.get(fix_id, "?")
-            icon = "✓ test" if vtype == "test" else "○ deploy-only"
-            print(f"      {fix_id}: {icon}")
+            if vtype == "deploy":
+                print(f"      {fix_id}: ○ deploy-only")
+            else:
+                tests = fix_tests.get(fix_id, [])
+                comp = fix_to_component.get(fix_id, "?")
+                print(f"      {fix_id} [{comp}] ({len(tests)} tests):")
+                for t in tests[:5]:
+                    node = t.test_node_id.split("::", 1)[-1] if "::" in t.test_node_id else t.test_node_id
+                    print(f"        - {node}")
+                if len(tests) > 5:
+                    print(f"        ... +{len(tests) - 5} more")
         print(f"      Tests:     {spec.get('test_count', '?')}")
         if spec["jenkins_params"].get("RUN_TEST"):
             expr = spec["jenkins_params"].get("TEST_MARK_EXPRESSION", "?")
